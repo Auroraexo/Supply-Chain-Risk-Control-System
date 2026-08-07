@@ -5,3 +5,4 @@ from app.models.decision_result import DecisionResult, Decision
 from app.models.rule_node import RuleNode, RuleType, LogicOp
 from app.models.rule_version import RuleVersion
 from app.models.agent_execution_log import AgentExecutionLog
+from app.models.user import User, UserRole

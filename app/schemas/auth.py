@@ -1,7 +1,7 @@
 """认证相关 Schema。"""
 
 from typing import Optional
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
@@ -13,7 +13,7 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     """注册请求。"""
     username: str = Field(..., min_length=2, max_length=50, description="用户名")
-    email: EmailStr = Field(..., description="邮箱")
+    email: str = Field(..., pattern=r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$', description="邮箱")
     password: str = Field(..., min_length=6, max_length=128, description="密码")
     role: Optional[str] = Field(default="analyst", description="角色（analyst/decider/admin）")
 
