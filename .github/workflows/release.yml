@@ -1,0 +1,152 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: read
+
+jobs:
+  # ==========================================================================
+  # Job 1: 创建 GitHub Release
+  # ==========================================================================
+  create-release:
+    name: "Create GitHub Release"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 提取版本号
+        id: version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG_NAME#v}
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "发布版本: $TAG_NAME (v$VERSION)"
+
+      - name: 生成 Changelog
+        id: changelog
+        uses: orhun/git-cliff-action@v3
+        with:
+          config: cliff.toml
+          args: >
+            --tag ${{ steps.version.outputs.tag }}
+            --verbose
+        env:
+          OUTPUT: CHANGELOG.md
+
+      - name: 读取 Changelog
+        id: read-changelog
+        run: |
+          if [ -f CHANGELOG.md ]; then
+            CHANGELOG=$(cat CHANGELOG.md)
+          else
+            # 使用 git log 生成简易 changelog
+            PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+            if [ -n "$PREVIOUS_TAG" ]; then
+              CHANGELOG=$(git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD)
+            else
+              CHANGELOG=$(git log --pretty=format:"- %s (%h)" -n 20)
+            fi
+          fi
+
+          # 写入 GITHUB_OUTPUT（多行处理）
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Release v${{ steps.version.outputs.version }}"
+          tag_name: ${{ steps.version.outputs.tag }}
+          body: |
+            ## 变更内容
+
+            ${{ steps.read-changelog.changelog }}
+
+            ## Docker 镜像
+
+            ```
+            docker pull ghcr.io/${{ github.repository }}:${{ steps.version.outputs.tag }}
+            ```
+
+            ## 部署说明
+
+            1. 拉取新镜像: `docker pull ghcr.io/${{ github.repository }}:${{ steps.version.outputs.tag }}`
+            2. 更新 docker-compose 中的镜像标签
+            3. 运行数据库迁移: `alembic upgrade head`
+            4. 重启服务: `docker compose up -d`
+
+            ## 校验
+
+            - [ ] CI 流水线通过
+            - [ ] Agent 评估通过
+            - [ ] 安全扫描通过
+            - [ ] Staging 部署验证通过
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
+          generate_release_notes: true
+          files: |
+            CHANGELOG.md
+
+      - name: 发布摘要
+        if: always()
+        run: |
+          echo "## Release 发布结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| 版本 | v${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 状态 | ✅ 发布成功 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release URL | ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }} |" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # Job 2: 自动打版本标签到 develop 分支
+  # ==========================================================================
+  sync-version-bump:
+    name: "Sync Version Bump to develop"
+    needs: create-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: 提取版本号
+        id: version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG_NAME#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: 更新 pyproject.toml 版本号
+        run: |
+          sed -i "s/^version = .*/version = \"${{ steps.version.outputs.version }}\"/" pyproject.toml
+
+      - name: 创建 PR 到 develop
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: "chore/bump-version-${{ steps.version.outputs.version }}"
+          base: develop
+          title: "chore: bump version to ${{ steps.version.outputs.version }}"
+          body: |
+            自动版本号同步。
+
+            - 版本: ${{ steps.version.outputs.version }}
+            - 来源: Release ${{ github.ref_name }}
+          commit-message: "chore: bump version to ${{ steps.version.outputs.version }}"
+          labels: "chore,automated"

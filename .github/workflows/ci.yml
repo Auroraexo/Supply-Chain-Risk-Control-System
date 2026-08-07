@@ -1,0 +1,346 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [develop, 'feature/**', 'fix/**', 'agent/**']
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+# 并发控制：同一分支/PR 的新提交自动取消旧运行
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  UV_VERSION: "0.4.x"
+
+jobs:
+  # ==========================================================================
+  # Job 1: 代码质量检查（lint）
+  # ==========================================================================
+  lint:
+    name: "Lint & Type Check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: 安装 Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: 安装依赖
+        run: uv sync --frozen --all-extras
+
+      - name: Ruff 代码风格检查
+        run: uv run ruff check . --output-format=github
+
+      - name: Ruff 代码格式化检查
+        run: uv run ruff format --check .
+
+      - name: Mypy 静态类型检查
+        run: uv run mypy app/ --no-error-summary
+
+      - name: Bandit 安全扫描
+        run: uv run bandit -r app/ -ll -f json -o bandit-report.json
+        continue-on-error: true
+
+      - name: 上传 Bandit 报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          retention-days: 7
+
+  # ==========================================================================
+  # Job 2: 单元测试 + 集成测试 + 覆盖率
+  # ==========================================================================
+  test:
+    name: "Unit & Integration Tests"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: supply_chain_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: "mysql+asyncmy://root:test_password@127.0.0.1:3306/supply_chain_test"
+      REDIS_URL: "redis://127.0.0.1:6379/0"
+      ENVIRONMENT: test
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: 安装 Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: 安装依赖
+        run: uv sync --frozen --all-extras
+
+      - name: 等待 MySQL 就绪
+        run: |
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -u root -ptest_password --silent; then
+              echo "MySQL is ready"
+              break
+            fi
+            echo "Waiting for MySQL... ($i/30)"
+            sleep 2
+          done
+
+      - name: 运行数据库迁移
+        run: uv run alembic upgrade head
+
+      - name: 单元测试（含覆盖率）
+        run: |
+          uv run pytest tests/unit/ \
+            -v \
+            --tb=short \
+            --cov=app \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:coverage_html \
+            --cov-fail-under=80 \
+            -n auto
+
+      - name: 集成测试
+        run: |
+          uv run pytest tests/integration/ \
+            -v \
+            --tb=short \
+            -n auto
+
+      - name: 上传覆盖率报告 (Codecov)
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: unittests
+          fail_ci_if_error: false
+
+      - name: 上传覆盖率 HTML 报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage_html/
+          retention-days: 7
+
+      - name: 上传测试结果
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            .pytest_cache/
+            test-results/
+          retention-days: 3
+
+  # ==========================================================================
+  # Job 3: Agent 评估测试
+  # ==========================================================================
+  agent-eval:
+    name: "Agent Evaluation Tests"
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: supply_chain_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: "mysql+asyncmy://root:test_password@127.0.0.1:3306/supply_chain_test"
+      REDIS_URL: "redis://127.0.0.1:6379/0"
+      ENVIRONMENT: test
+      # Mock LLM 模式：评估测试不调用真实 API
+      LLM_MOCK_MODE: "true"
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: 安装 Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: 安装依赖
+        run: uv sync --frozen --all-extras
+
+      - name: 运行数据库迁移
+        run: uv run alembic upgrade head
+
+      - name: 侦察兵 Agent 评估
+        run: uv run pytest tests/agent_eval/test_scout_eval.py -v --tb=short
+
+      - name: 分析师 Agent 评估
+        run: uv run pytest tests/agent_eval/test_analyst_eval.py -v --tb=short
+
+      - name: 决策官 Agent 评估
+        run: uv run pytest tests/agent_eval/test_decider_eval.py -v --tb=short
+
+      - name: 端到端 Agent 流程评估
+        run: uv run pytest tests/agent_eval/test_e2e_flow.py -v --tb=short
+
+      - name: 生成 Agent 评估报告
+        if: always()
+        run: |
+          echo "## Agent 评估结果" >> $GITHUB_STEP_SUMMARY
+          echo "| Agent | 准确率 | 一致性 | 鲁棒性 |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Scout | - | - | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| Analyst | - | - | - |" >> $GITHUB_STEP_SUMMARY
+          echo "| Decider | - | - | - |" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # Job 4: 安全依赖扫描
+  # ==========================================================================
+  security-scan:
+    name: "Security Dependency Scan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: 安装 Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: 安装依赖
+        run: uv sync --frozen --all-extras
+
+      - name: 导出 requirements.txt
+        run: uv pip freeze > requirements.txt
+
+      - name: pip-audit 安全扫描
+        uses: pypa/gh-action-pip-audit@v1.0.8
+        with:
+          inputs: requirements.txt
+          # 忽略已知无修复方案的低危漏洞（可配置）
+          ignore-vulns: ""
+
+      - name: Safety 安全扫描（补充）
+        run: |
+          uv run pip install safety
+          uv run safety check --file=requirements.txt --full-report
+        continue-on-error: true
+
+      - name: 上传安全扫描报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: |
+            requirements.txt
+          retention-days: 14
+
+  # ==========================================================================
+  # Job 5: CI 汇总状态
+  # ==========================================================================
+  ci-status:
+    name: "CI Status Check"
+    needs: [lint, test, agent-eval, security-scan]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+
+    steps:
+      - name: 检查所有任务状态
+        run: |
+          echo "## CI 流水线状态" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          RESULTS=(
+            "lint:${{ needs.lint.result }}"
+            "test:${{ needs.test.result }}"
+            "agent-eval:${{ needs.agent-eval.result }}"
+            "security-scan:${{ needs.security-scan.result }}"
+          )
+
+          FAILED=0
+          for result in "${RESULTS[@]}"; do
+            job="${result%%:*}"
+            status="${result##*:}"
+            icon="✅"
+            if [ "$status" != "success" ]; then
+              icon="❌"
+              FAILED=1
+            fi
+            echo "- $icon **$job**: $status" >> $GITHUB_STEP_SUMMARY
+          done
+
+          if [ $FAILED -eq 1 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ 部分任务失败，请检查上方日志。" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ 所有 CI 任务通过！" >> $GITHUB_STEP_SUMMARY

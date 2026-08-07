@@ -1,0 +1,58 @@
+# git-cliff 配置文件
+# 用于自动生成 CHANGELOG.md
+# 文档: https://git-cliff.org/docs/configuration
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+"""
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | upper_first }}
+    {% for commit in commits %}
+        - {% if commit.scope %}**{{ commit.scope }}**: {% endif %}\
+            {{ commit.message | upper_first }}\
+            ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/commit/{{ commit.id }}))\
+    {% endfor %}
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+commit_parsers = [
+    { message = "^feat", group = "<!-- 0 -->Features" },
+    { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
+    { message = "^docs", group = "<!-- 2 -->Documentation" },
+    { message = "^style", group = "<!-- 3 -->Styling" },
+    { message = "^refactor", group = "<!-- 4 -->Refactoring" },
+    { message = "^perf", group = "<!-- 5 -->Performance" },
+    { message = "^test", group = "<!-- 6 -->Testing" },
+    { message = "^build", group = "<!-- 7 -->Build" },
+    { message = "^ci", group = "<!-- 8 -->CI" },
+    { message = "^chore", group = "<!-- 9 -->Miscellaneous Tasks" },
+    { message = "^revert", group = "<!-- 10 -->Revert" },
+    { message = "^agent", group = "<!-- 11 -->Agent" },
+    { message = "^rule", group = "<!-- 12 -->Rule Engine" },
+]
+protect_breaking_commit_label = false
+filter_commits = false
+tag_pattern = "v[0-9]*"
+skip_tags = "v0.1.0-beta.1"
+ignore_tags = ""
+topo_order = false
+sort_commits = "oldest"
+link_parsers = [
+    { pattern = "#(\\d+)", href = "https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/issues/$1"},
+    { pattern = "PR#(\\d+)", href = "https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/pull/$1"},
+]

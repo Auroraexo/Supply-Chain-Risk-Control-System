@@ -1,0 +1,277 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    branches: [main]
+    types: [completed]
+  # 也支持手动触发部署
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "部署环境"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: "部署版本（留空使用 latest）"
+        required: false
+        type: string
+        default: "latest"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ==========================================================================
+  # Job 1: 部署到 Staging 环境
+  # ==========================================================================
+  deploy-staging:
+    name: "Deploy to Staging"
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: https://staging.supply-chain-risk.example.com
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 确定部署版本
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 部署到 Staging (Docker Compose)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          port: ${{ secrets.STAGING_PORT || 22 }}
+          script: |
+            set -e
+
+            # 登录 GHCR
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # 拉取最新镜像
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+
+            # 切换到部署目录
+            cd /opt/supply-chain-risk-control
+
+            # 更新 .env 中的镜像标签
+            export IMAGE_TAG=${{ steps.version.outputs.tag }}
+
+            # 滚动更新（零停机）
+            docker compose -f docker-compose.staging.yml up -d --no-deps app
+
+            # 清理旧镜像
+            docker image prune -f --filter "until=24h"
+
+            # 等待健康检查通过
+            echo "等待服务健康检查..."
+            for i in {1..30}; do
+              if curl -sf http://localhost:8000/health/live > /dev/null; then
+                echo "服务已就绪"
+                break
+              fi
+              echo "等待中... ($i/30)"
+              sleep 3
+            done
+
+            # 运行数据库迁移
+            docker compose -f docker-compose.staging.yml exec -T app uv run alembic upgrade head
+
+            echo "Staging 部署完成！版本: ${{ steps.version.outputs.tag }}"
+
+      - name: Staging 冒烟测试
+        run: |
+          echo "运行冒烟测试..."
+          curl -sf https://staging.supply-chain-risk.example.com/health/live || exit 1
+          curl -sf https://staging.supply-chain-risk.example.com/health/ready || exit 1
+          echo "冒烟测试通过"
+
+      - name: 部署摘要
+        if: always()
+        run: |
+          echo "## Staging 部署结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| 环境 | staging |" >> $GITHUB_STEP_SUMMARY
+          echo "| 版本 | ${{ steps.version.outputs.tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| URL | https://staging.supply-chain-risk.example.com |" >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # Job 2: 部署到 Production 环境（需手动审批）
+  # ==========================================================================
+  deploy-production:
+    name: "Deploy to Production"
+    needs: deploy-staging
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://supply-chain-risk.example.com
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+
+      - name: 确定部署版本
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 部署到 Production (Docker Compose)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          port: ${{ secrets.PRODUCTION_PORT || 22 }}
+          script: |
+            set -e
+
+            # 登录 GHCR
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # 拉取最新镜像
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+
+            # 切换到部署目录
+            cd /opt/supply-chain-risk-control
+
+            # 备份当前版本标签（用于快速回滚）
+            CURRENT_TAG=$(docker inspect --format='{{index .Config.Labels "org.opencontainers.image.version"}}' supply-chain-app || echo "unknown")
+            echo "当前版本: $CURRENT_TAG"
+            echo "$CURRENT_TAG" > /tmp/previous_version.txt
+
+            # 更新 .env
+            export IMAGE_TAG=${{ steps.version.outputs.tag }}
+
+            # 滚动更新（零停机）
+            docker compose -f docker-compose.production.yml up -d --no-deps app
+
+            # 等待健康检查通过
+            echo "等待服务健康检查..."
+            for i in {1..60}; do
+              if curl -sf http://localhost:8000/health/live > /dev/null; then
+                echo "服务已就绪"
+                break
+              fi
+              echo "等待中... ($i/60)"
+              sleep 3
+            done
+
+            # 运行数据库迁移
+            docker compose -f docker-compose.production.yml exec -T app uv run alembic upgrade head
+
+            # 清理旧镜像
+            docker image prune -f --filter "until=72h"
+
+            echo "Production 部署完成！版本: ${{ steps.version.outputs.tag }}"
+
+      - name: Production 冒烟测试
+        run: |
+          echo "运行冒烟测试..."
+          # 健康检查
+          curl -sf https://supply-chain-risk.example.com/health/live || exit 1
+          curl -sf https://supply-chain-risk.example.com/health/ready || exit 1
+          # API 端点检查
+          curl -sf https://supply-chain-risk.example.com/api/v1/docs || exit 1
+          echo "冒烟测试通过"
+
+      - name: 部署摘要
+        if: always()
+        run: |
+          echo "## Production 部署结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| 环境 | production |" >> $GITHUB_STEP_SUMMARY
+          echo "| 版本 | ${{ steps.version.outputs.tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| URL | https://supply-chain-risk.example.com |" >> $GITHUB_STEP_SUMMARY
+
+      # ====================================================================
+      # 如果部署失败，自动回滚
+      # ====================================================================
+      - name: 自动回滚（部署失败时）
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PRODUCTION_HOST }}
+          username: ${{ secrets.PRODUCTION_USER }}
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          port: ${{ secrets.PRODUCTION_PORT || 22 }}
+          script: |
+            set -e
+            cd /opt/supply-chain-risk-control
+
+            PREVIOUS_TAG=$(cat /tmp/previous_version.txt 2>/dev/null || echo "")
+            if [ -n "$PREVIOUS_TAG" ] && [ "$PREVIOUS_TAG" != "unknown" ]; then
+              echo "回滚到版本: $PREVIOUS_TAG"
+              export IMAGE_TAG=$PREVIOUS_TAG
+              docker compose -f docker-compose.production.yml up -d --no-deps app
+              echo "回滚完成"
+            else
+              echo "无可用回滚版本"
+            fi
+
+  # ==========================================================================
+  # Job 3: 部署通知
+  # ==========================================================================
+  notify:
+    name: "Deploy Notification"
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 发送部署通知
+        run: |
+          STAGING_STATUS="${{ needs.deploy-staging.result }}"
+          PROD_STATUS="${{ needs.deploy-production.result }}"
+
+          echo "## 部署通知" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$STAGING_STATUS" = "success" ] && [ "$PROD_STATUS" = "success" ]; then
+            echo "✅ Staging 和 Production 部署成功" >> $GITHUB_STEP_SUMMARY
+          elif [ "$STAGING_STATUS" = "success" ]; then
+            echo "✅ Staging 部署成功，Production 部署跳过/失败" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ 部署失败，请检查日志" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # 可选：发送 Slack / 企业微信 通知
+      # - name: Slack 通知
+      #   uses: slackapi/slack-github-action@v1.24.0
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "部署完成: ${{ github.repository }} - ${{ github.ref_name }}"
+      #       }
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

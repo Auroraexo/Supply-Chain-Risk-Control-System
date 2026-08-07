@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pypackages/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Docs
+docs/
+*.md
+
+# Tests
+tests/
+htmlcov/
+.coverage
+coverage_html/
+
+# Env
+.env
+.env.local
+
+# CI/CD
+.github/
+.pre-commit-config.yaml
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Misc
+*.log
+tmp/
