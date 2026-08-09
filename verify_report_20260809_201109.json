@@ -1,0 +1,92 @@
+{
+  "verify_time": "2026-08-09T20:11:09.679338",
+  "database": "supply_chain_risk",
+  "checks": [
+    {
+      "check": "迁移版本",
+      "result": "PASS",
+      "detail": "['24a1889aad53']"
+    },
+    {
+      "check": "表完整性",
+      "result": "PASS",
+      "detail": "共 7 张表"
+    },
+    {
+      "check": "表 raw_data",
+      "result": "PASS",
+      "detail": "1 行, 10 列, 索引: ['id', 'data_hash', 'status', 'created_at', 'source_type', 'source_id']"
+    },
+    {
+      "check": "表 analysis_results",
+      "result": "PASS",
+      "detail": "6 行, 10 列, 索引: ['id', 'raw_data_id', 'request_id']"
+    },
+    {
+      "check": "表 decision_results",
+      "result": "PASS",
+      "detail": "5 行, 11 列, 索引: ['id', 'analysis_id', 'request_id']"
+    },
+    {
+      "check": "表 rule_nodes",
+      "result": "PASS",
+      "detail": "0 行, 18 列, 索引: ['id', 'parent_id']"
+    },
+    {
+      "check": "表 rule_versions",
+      "result": "PASS",
+      "detail": "0 行, 8 列, 索引: ['id', 'rule_id', 'version']"
+    },
+    {
+      "check": "表 agent_execution_logs",
+      "result": "PASS",
+      "detail": "0 行, 13 列, 索引: ['id', 'request_id', 'agent_name']"
+    },
+    {
+      "check": "表 users",
+      "result": "PASS",
+      "detail": "0 行, 9 列, 索引: ['id', 'email', 'username']"
+    },
+    {
+      "check": "外键约束",
+      "result": "PASS",
+      "detail": "共 4 个"
+    },
+    {
+      "check": "users 表结构",
+      "result": "PASS",
+      "detail": "所有列完整"
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "duration_seconds": 0.122495,
+    "total_checks": 11,
+    "errors": 0
+  },
+  "migration_version": [
+    "24a1889aad53"
+  ],
+  "foreign_keys": [
+    {
+      "table": "decision_results",
+      "column": "analysis_id",
+      "references": "analysis_results.id"
+    },
+    {
+      "table": "analysis_results",
+      "column": "raw_data_id",
+      "references": "raw_data.id"
+    },
+    {
+      "table": "rule_versions",
+      "column": "rule_id",
+      "references": "rule_nodes.id"
+    },
+    {
+      "table": "rule_nodes",
+      "column": "parent_id",
+      "references": "rule_nodes.id"
+    }
+  ]
+}
