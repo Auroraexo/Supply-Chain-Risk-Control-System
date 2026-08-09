@@ -1,8 +1,9 @@
 export interface ApiResponse<T> {
-  code: number;
+  code: string;
   message: string;
   data: T;
-  timestamp: string;
+  timestamp?: string;
+  trace_id?: string;
 }
 
 export interface PaginatedData<T> {
@@ -27,6 +28,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
   expires_in: number;
   user: {

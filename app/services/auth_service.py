@@ -73,6 +73,14 @@ class AuthService:
             access_token=access_token,
             refresh_token=refresh_token,
             expires_in=self._settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user={
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role.value,
+                "is_active": user.is_active,
+                "created_at": user.created_at.isoformat() if user.created_at else "",
+            },
         )
 
     async def register(self, request: RegisterRequest) -> UserInfoResponse:

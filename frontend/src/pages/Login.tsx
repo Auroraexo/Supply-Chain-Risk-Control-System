@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { useAuthStore } from '@/stores/authStore';
 import { useToastStore } from '@/stores/toastStore';
+import { authService } from '@/services/authService';
 
 export function Login() {
   const [username, setUsername] = useState('');
@@ -28,24 +29,27 @@ export function Login() {
 
     setLoading(true);
     try {
-      // 模拟登录 - 实际应调用API
-      await new Promise((r) => setTimeout(r, 800));
+      const response = await authService.login({ username, password });
+      const { access_token, user } = response.data;
+      localStorage.setItem('auth_token', access_token);
       login(
         {
-          id: '1',
-          username,
-          email: `${username}@example.com`,
-          role: username === 'admin' ? 'admin' : username === 'analyst' ? 'analyst' : 'decider',
+          id: user.id,
+          username: user.username,
+          email: '',
+          role: user.role as 'analyst' | 'decider' | 'admin',
           is_active: true,
-          created_at: new Date().toISOString(),
+          created_at: '',
         },
-        'mock-token'
+        access_token
       );
-      localStorage.setItem('auth_token', 'mock-token');
       addToast({ type: 'success', title: '登录成功', message: '欢迎回来' });
       navigate('/dashboard');
-    } catch {
-      setError('登录失败，请检查用户名和密码');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: { message?: string } } } })?.response?.data?.detail?.message
+        || (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+        || '登录失败，请检查用户名和密码';
+      setError(msg);
     } finally {
       setLoading(false);
     }

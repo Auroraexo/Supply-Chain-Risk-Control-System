@@ -2,7 +2,7 @@ export type RiskLevel = 'critical' | 'high' | 'medium' | 'low' | 'none';
 
 export type DataStatus = 'pending' | 'processing' | 'running' | 'completed' | 'failed';
 
-export type DecisionType = 'auto_approved' | 'auto_rejected' | 'manual_review';
+export type DecisionType = 'approve' | 'reject' | 'escalate' | 'pending_review';
 
 export type DecisionStatus = 'pending' | 'approved' | 'rejected' | 'escalated';
 
@@ -10,13 +10,15 @@ export type UserRole = 'analyst' | 'decider' | 'admin';
 
 export interface RawData {
   id: string;
-  request_id: string;
-  source: string;
-  data_type: string;
-  content: Record<string, unknown>;
+  source_type: string;
+  source_id: string;
+  payload: Record<string, unknown>;
+  data_hash: string;
   status: DataStatus;
+  quality_score: number | null;
   created_at: string;
-  updated_at: string;
+  updated_at: string | null;
+  processed_at: string | null;
 }
 
 export interface RiskFactor {
@@ -26,62 +28,60 @@ export interface RiskFactor {
   score: number;
 }
 
-export interface AgentExecutionLog {
-  id: string;
-  agent_name: string;
-  action: string;
-  input: Record<string, unknown>;
-  output: Record<string, unknown>;
-  duration_ms: number;
-  status: 'success' | 'error';
-  error_message: string | null;
-  created_at: string;
-}
-
 export interface AnalysisResult {
   id: string;
   request_id: string;
   raw_data_id: string;
   risk_level: RiskLevel;
   risk_score: number;
-  risk_factors: RiskFactor[];
-  confidence: number;
-  agent_log: AgentExecutionLog[];
-  status: DataStatus;
+  anomaly_tags: string[] | null;
+  reasoning: string | null;
+  facts_summary: Record<string, unknown> | null;
   created_at: string;
-  completed_at: string | null;
+  updated_at: string | null;
 }
 
 export interface DecisionResult {
   id: string;
   request_id: string;
-  analysis_result_id: string;
-  decision_type: DecisionType;
-  status: DecisionStatus;
-  reason: string;
-  rule_node_id: string | null;
-  reviewer_id: string | null;
+  analysis_id: string;
+  decision: DecisionType;
+  confidence: number | null;
+  explanation: string | null;
+  decision_path: string[] | null;
+  reflection_passed: boolean | null;
+  reviewed_by: string | null;
   created_at: string;
-  resolved_at: string | null;
+  updated_at: string | null;
 }
 
 export interface RuleNode {
   id: string;
-  name: string;
-  condition: string;
-  action: string;
+  rule_name: string;
+  rule_type: string;
+  condition_type: string | null;
+  field_name: string | null;
+  operator: string | null;
+  threshold_value: string | null;
+  logic_op: string;
+  weight: number;
+  action: string | null;
+  action_params: Record<string, unknown> | null;
   priority: number;
-  enabled: boolean;
+  is_active: boolean;
+  version: number;
+  description: string | null;
+  parent_id: string | null;
   children: RuleNode[];
 }
 
 export interface RuleVersion {
   id: string;
-  version: string;
-  rule_tree: RuleNode;
-  changelog: string;
-  published: boolean;
-  published_at: string | null;
+  rule_id: string;
+  version: number;
+  snapshot: Record<string, unknown>;
+  changed_by: string | null;
+  change_reason: string | null;
   created_at: string;
 }
 

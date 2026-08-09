@@ -49,22 +49,15 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI 依赖注入：获取数据库会话。
-
-    注意：commit 由 Service 层显式调用，本函数仅负责
-    session 的创建和关闭。FastAPI 清理 async generator 时
-    使用 aclose() 抛出 GeneratorExit，会跳过 yield 后的
-    代码，因此 commit 不能放在 yield 之后。
-
-    使用方式：
-        @router.get("/items")
-        async def get_items(db: AsyncSession = Depends(get_db)):
-            ...
-    """
+    """FastAPI 依赖注入：获取数据库会话。"""
     factory = get_session_factory()
     session = factory()
     try:
         yield session
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
     finally:
         await session.close()
 

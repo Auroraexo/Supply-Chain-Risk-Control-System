@@ -11,42 +11,82 @@ import type { RuleNode } from '@/types/models';
 const initialTree: RuleNode[] = [
   {
     id: 'root',
-    name: '风险评估规则',
-    condition: 'always',
+    rule_name: '风险评估规则',
+    rule_type: 'root',
+    condition_type: null,
+    field_name: null,
+    operator: null,
+    threshold_value: null,
+    logic_op: 'AND',
+    weight: 100,
     action: 'evaluate',
+    action_params: null,
     priority: 1,
-    enabled: true,
+    is_active: true,
+    version: 1,
+    description: '根节点',
+    parent_id: null,
     children: [
       {
         id: 'rule-1',
-        name: '供应商风险评估',
-        condition: 'source == "supplier"',
+        rule_name: '供应商风险评估',
+        rule_type: 'condition',
+        condition_type: 'field',
+        field_name: 'source_type',
+        operator: 'eq',
+        threshold_value: 'supplier',
+        logic_op: 'AND',
+        weight: 10,
         action: 'check_supplier_risk',
+        action_params: null,
         priority: 10,
-        enabled: true,
+        is_active: true,
+        version: 1,
+        description: '检查供应商风险',
+        parent_id: 'root',
         children: [
-          { id: 'rule-1-1', name: '交货延迟检查', condition: 'delay_rate > 0.3', action: 'flag_high_risk', priority: 1, enabled: true, children: [] },
-          { id: 'rule-1-2', name: '资质过期检查', condition: 'cert_expiry < 30', action: 'flag_medium_risk', priority: 2, enabled: true, children: [] },
+          { id: 'rule-1-1', rule_name: '交货延迟检查', rule_type: 'condition', condition_type: 'field', field_name: 'delay_rate', operator: 'gt', threshold_value: '0.3', logic_op: 'AND', weight: 1, action: 'flag_high_risk', action_params: null, priority: 1, is_active: true, version: 1, description: null, parent_id: 'rule-1', children: [] },
+          { id: 'rule-1-2', rule_name: '资质过期检查', rule_type: 'condition', condition_type: 'field', field_name: 'cert_expiry', operator: 'lt', threshold_value: '30', logic_op: 'AND', weight: 1, action: 'flag_medium_risk', action_params: null, priority: 2, is_active: true, version: 1, description: null, parent_id: 'rule-1', children: [] },
         ],
       },
       {
         id: 'rule-2',
-        name: '库存风险评估',
-        condition: 'source == "inventory"',
+        rule_name: '库存风险评估',
+        rule_type: 'condition',
+        condition_type: 'field',
+        field_name: 'source_type',
+        operator: 'eq',
+        threshold_value: 'inventory',
+        logic_op: 'AND',
+        weight: 20,
         action: 'check_inventory_risk',
+        action_params: null,
         priority: 20,
-        enabled: true,
+        is_active: true,
+        version: 1,
+        description: '检查库存风险',
+        parent_id: 'root',
         children: [
-          { id: 'rule-2-1', name: '安全库存检查', condition: 'quantity < safety_stock * 0.5', action: 'flag_critical_risk', priority: 1, enabled: true, children: [] },
+          { id: 'rule-2-1', rule_name: '安全库存检查', rule_type: 'condition', condition_type: 'field', field_name: 'quantity', operator: 'lt', threshold_value: 'safety_stock * 0.5', logic_op: 'AND', weight: 1, action: 'flag_critical_risk', action_params: null, priority: 1, is_active: true, version: 1, description: null, parent_id: 'rule-2', children: [] },
         ],
       },
       {
         id: 'rule-3',
-        name: '物流风险评估',
-        condition: 'source == "logistics"',
+        rule_name: '物流风险评估',
+        rule_type: 'condition',
+        condition_type: 'field',
+        field_name: 'source_type',
+        operator: 'eq',
+        threshold_value: 'logistics',
+        logic_op: 'AND',
+        weight: 30,
         action: 'check_logistics_risk',
+        action_params: null,
         priority: 30,
-        enabled: false,
+        is_active: false,
+        version: 1,
+        description: '物流风险检查',
+        parent_id: 'root',
         children: [],
       },
     ],
@@ -56,7 +96,7 @@ const initialTree: RuleNode[] = [
 function RuleNodeItem({ node, depth = 0 }: { node: RuleNode; depth?: number }) {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState(node.name);
+  const [editName, setEditName] = useState(node.rule_name);
   const hasChildren = node.children && node.children.length > 0;
 
   return (
@@ -84,10 +124,10 @@ function RuleNodeItem({ node, depth = 0 }: { node: RuleNode; depth?: number }) {
               onKeyDown={(e) => e.key === 'Enter' && setEditing(false)}
             />
           ) : (
-            <span className="text-body text-text-primary font-medium truncate">{node.name}</span>
+            <span className="text-body text-text-primary font-medium truncate">{node.rule_name}</span>
           )}
           <Badge variant="default">
-            {node.condition}
+            {node.field_name || node.rule_type}
           </Badge>
         </div>
 
@@ -102,7 +142,7 @@ function RuleNodeItem({ node, depth = 0 }: { node: RuleNode; depth?: number }) {
             <Trash2 size={14} />
           </button>
           <button className="p-1 rounded text-text-muted hover:text-text-primary">
-            {node.enabled ? <ToggleRight size={18} className="text-risk-low" /> : <ToggleLeft size={18} />}
+            {node.is_active ? <ToggleRight size={18} className="text-risk-low" /> : <ToggleLeft size={18} />}
           </button>
         </div>
       </div>

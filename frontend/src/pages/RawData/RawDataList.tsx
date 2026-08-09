@@ -13,11 +13,11 @@ import type { RawData, DataStatus } from '@/types/models';
 import type { TableColumn } from '@/types/common';
 
 const mockData: RawData[] = [
-  { id: '1', request_id: 'REQ-001', source: 'ERP系统', data_type: 'inventory', content: {}, status: 'completed', created_at: '2026-08-07T10:30:00Z', updated_at: '2026-08-07T10:30:00Z' },
-  { id: '2', request_id: 'REQ-002', source: '供应商API', data_type: 'supplier', content: {}, status: 'processing', created_at: '2026-08-07T09:15:00Z', updated_at: '2026-08-07T09:20:00Z' },
-  { id: '3', request_id: 'REQ-003', source: '物流平台', data_type: 'logistics', content: {}, status: 'completed', created_at: '2026-08-07T08:00:00Z', updated_at: '2026-08-07T08:05:00Z' },
-  { id: '4', request_id: 'REQ-004', source: '手动录入', data_type: 'manual', content: {}, status: 'pending', created_at: '2026-08-06T16:45:00Z', updated_at: '2026-08-06T16:45:00Z' },
-  { id: '5', request_id: 'REQ-005', source: 'ERP系统', data_type: 'inventory', content: {}, status: 'failed', created_at: '2026-08-06T14:20:00Z', updated_at: '2026-08-06T14:21:00Z' },
+  { id: '1', source_type: 'ERP系统', source_id: 'ERP-001', payload: {}, data_hash: '', status: 'completed', quality_score: 0.95, created_at: '2026-08-07T10:30:00Z', updated_at: '2026-08-07T10:30:00Z', processed_at: null },
+  { id: '2', source_type: '供应商API', source_id: 'SUP-002', payload: {}, data_hash: '', status: 'processing', quality_score: null, created_at: '2026-08-07T09:15:00Z', updated_at: '2026-08-07T09:20:00Z', processed_at: null },
+  { id: '3', source_type: '物流平台', source_id: 'LOG-003', payload: {}, data_hash: '', status: 'completed', quality_score: 0.88, created_at: '2026-08-07T08:00:00Z', updated_at: '2026-08-07T08:05:00Z', processed_at: null },
+  { id: '4', source_type: '手动录入', source_id: '', payload: {}, data_hash: '', status: 'pending', quality_score: null, created_at: '2026-08-06T16:45:00Z', updated_at: '2026-08-06T16:45:00Z', processed_at: null },
+  { id: '5', source_type: 'ERP系统', source_id: 'ERP-005', payload: {}, data_hash: '', status: 'failed', quality_score: null, created_at: '2026-08-06T14:20:00Z', updated_at: '2026-08-06T14:21:00Z', processed_at: null },
 ];
 
 const statusConfig: Record<DataStatus, { label: string; variant: 'info' | 'success' | 'default' | 'high' }> = {
@@ -29,9 +29,8 @@ const statusConfig: Record<DataStatus, { label: string; variant: 'info' | 'succe
 };
 
 const columns: TableColumn<RawData>[] = [
-  { key: 'request_id', header: '请求ID' },
-  { key: 'source', header: '数据来源' },
-  { key: 'data_type', header: '数据类型' },
+  { key: 'source_type', header: '数据来源' },
+  { key: 'source_id', header: '源ID', render: (row) => <span>{row.source_id || '-'}</span> },
   {
     key: 'status',
     header: '状态',
@@ -69,7 +68,7 @@ export function RawDataList() {
   const navigate = useNavigate();
 
   const filtered = mockData.filter((d) => {
-    if (search && !d.request_id.toLowerCase().includes(search.toLowerCase()) && !d.source.includes(search)) return false;
+    if (search && !d.source_type.toLowerCase().includes(search.toLowerCase())) return false;
     if (statusFilter && d.status !== statusFilter) return false;
     return true;
   });
@@ -105,7 +104,7 @@ export function RawDataList() {
       <Card padding="none">
         <div className="flex items-center gap-3 p-4 border-b border-border">
           <Input
-            placeholder="搜索请求ID或来源..."
+            placeholder="搜索数据来源..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-xs"

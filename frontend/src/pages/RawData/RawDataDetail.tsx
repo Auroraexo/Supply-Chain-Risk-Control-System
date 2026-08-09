@@ -7,10 +7,9 @@ import type { RawData } from '@/types/models';
 
 const mockDetail: RawData = {
   id: '1',
-  request_id: 'REQ-001',
-  source: 'ERP系统',
-  data_type: 'inventory',
-  content: {
+  source_type: 'ERP系统',
+  source_id: 'ERP-001',
+  payload: {
     warehouse: '华东仓A',
     sku: 'SKU-12345',
     quantity: 1500,
@@ -18,9 +17,12 @@ const mockDetail: RawData = {
     lead_time_days: 7,
     supplier: '供应商A',
   },
+  data_hash: '',
   status: 'completed',
+  quality_score: 0.95,
   created_at: '2026-08-07T10:30:00Z',
   updated_at: '2026-08-07T10:30:00Z',
+  processed_at: null,
 };
 
 export function RawDataDetail() {
@@ -36,7 +38,7 @@ export function RawDataDetail() {
         </Button>
         <div>
           <h1 className="text-h1 text-text-primary">数据详情</h1>
-          <p className="text-body text-text-secondary mt-1">{mockDetail.request_id}</p>
+          <p className="text-body text-text-secondary mt-1">{mockDetail.source_type} · {mockDetail.source_id}</p>
         </div>
       </div>
 
@@ -45,11 +47,11 @@ export function RawDataDetail() {
           <h3 className="text-h3 text-text-primary mb-4">基本信息</h3>
           <dl className="space-y-3">
             {[
-              { label: '请求ID', value: mockDetail.request_id },
-              { label: '数据来源', value: mockDetail.source },
-              { label: '数据类型', value: mockDetail.data_type },
+              { label: '数据来源', value: mockDetail.source_type },
+              { label: '源ID', value: mockDetail.source_id || '-' },
+              { label: '数据哈希', value: mockDetail.data_hash || '-' },
               { label: '创建时间', value: new Date(mockDetail.created_at).toLocaleString('zh-CN') },
-              { label: '更新时间', value: new Date(mockDetail.updated_at).toLocaleString('zh-CN') },
+              { label: '更新时间', value: mockDetail.updated_at ? new Date(mockDetail.updated_at).toLocaleString('zh-CN') : '-' },
             ].map(({ label, value }) => (
               <div key={label} className="flex justify-between">
                 <dt className="text-body text-text-muted">{label}</dt>
@@ -66,7 +68,7 @@ export function RawDataDetail() {
         <Card>
           <h3 className="text-h3 text-text-primary mb-4">数据内容</h3>
           <pre className="bg-bg-primary rounded-input p-4 text-caption text-text-primary font-mono overflow-x-auto">
-            {JSON.stringify(mockDetail.content, null, 2)}
+            {JSON.stringify(mockDetail.payload, null, 2)}
           </pre>
         </Card>
       </div>

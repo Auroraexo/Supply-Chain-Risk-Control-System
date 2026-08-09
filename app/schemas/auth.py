@@ -24,6 +24,7 @@ class TokenResponse(BaseModel):
     refresh_token: str = Field(..., description="JWT Refresh Token")
     token_type: str = Field(default="bearer", description="Token 类型")
     expires_in: int = Field(..., description="过期时间（秒）")
+    user: dict = Field(..., description="用户基本信息")
 
 
 class UserInfoResponse(BaseModel):

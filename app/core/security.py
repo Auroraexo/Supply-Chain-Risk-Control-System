@@ -6,15 +6,25 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import get_settings
 
 # === 密码哈希 ===
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """验证密码。"""
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+
+
+def hash_password(password: str) -> str:
+    """哈希密码。"""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
 
 # === OAuth2 配置 ===
 oauth2_scheme = OAuth2PasswordBearer(
@@ -26,16 +36,6 @@ oauth2_scheme = OAuth2PasswordBearer(
         "agent": "Agent 调用权限",
     },
 )
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """验证密码。"""
-    return _pwd_context.verify(plain_password, hashed_password)
-
-
-def hash_password(password: str) -> str:
-    """哈希密码。"""
-    return _pwd_context.hash(password)
 
 
 def create_access_token(
