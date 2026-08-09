@@ -36,10 +36,10 @@ export function Login() {
         {
           id: user.id,
           username: user.username,
-          email: '',
+          email: user.email,
           role: user.role as 'analyst' | 'decider' | 'admin',
-          is_active: true,
-          created_at: '',
+          is_active: user.is_active,
+          created_at: user.created_at,
         },
         access_token
       );
