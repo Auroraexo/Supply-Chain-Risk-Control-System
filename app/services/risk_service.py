@@ -13,7 +13,7 @@ from app.repositories.decision_repo import DecisionRepository
 from app.models.analysis_result import AnalysisResult, RiskLevel
 from app.models.decision_result import DecisionResult, Decision as DecisionModel
 from app.models.raw_data import RawDataStatus
-from app.core.exceptions import NotFoundException, DataQualityException
+from app.core.exceptions import NotFoundException, DataQualityException, AppException, ErrorCode
 from app.agents.state import DecisionStatus
 import structlog
 
@@ -100,6 +100,17 @@ class RiskService:
             raw_data_id=raw_data_id,
             raw_data_payload=raw_data_payload,
         )
+        if final_state is None:
+            logger.error(
+                "risk_service.agent_flow_returned_none",
+                request_id=request_id,
+                raw_data_id=raw_data_id,
+            )
+            raise AppException(
+                code=ErrorCode.AGENT_STATE_ERROR,
+                message="Agent 决策流程返回空结果，请检查 LLM 配置",
+                status_code=500,
+            )
         logger.info(
             "risk_service.agent_flow_complete",
             request_id=request_id,

@@ -68,6 +68,11 @@ class RuleService:
             raise NotFoundException(f"规则未找到: {rule_id}")
 
         values = request.model_dump(exclude_unset=True)
+        # 将字符串转换为枚举类型，避免 SQLAlchemy bulk update 后 enum 字段为字符串
+        if "rule_type" in values:
+            values["rule_type"] = RuleType(values["rule_type"])
+        if "logic_op" in values:
+            values["logic_op"] = LogicOp(values["logic_op"])
         updated = await self.rule_repo.update(rule_id, values)
         if not updated:
             raise NotFoundException(f"规则更新失败: {rule_id}")
@@ -163,13 +168,13 @@ class RuleService:
         data = {
             "id": rule.id,
             "rule_name": rule.rule_name,
-            "rule_type": rule.rule_type.value if rule.rule_type else None,
+            "rule_type": rule.rule_type.value if hasattr(rule.rule_type, "value") else rule.rule_type,
             "parent_id": rule.parent_id,
             "condition_type": rule.condition_type,
             "field_name": rule.field_name,
             "operator": rule.operator,
             "threshold_value": rule.threshold_value,
-            "logic_op": rule.logic_op.value if rule.logic_op else None,
+            "logic_op": rule.logic_op.value if hasattr(rule.logic_op, "value") else rule.logic_op,
             "weight": rule.weight,
             "action": rule.action,
             "priority": rule.priority,

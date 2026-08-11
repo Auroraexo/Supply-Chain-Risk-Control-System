@@ -1,0 +1,554 @@
+{
+  "passed": 97,
+  "failed": 9,
+  "skipped": 0,
+  "details": [
+    {
+      "module": "Health",
+      "test": "存活探针 GET /health/live",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Health",
+      "test": "存活探针响应结构",
+      "status": "FAIL",
+      "error": "code should be OK, got None"
+    },
+    {
+      "module": "Health",
+      "test": "就绪探针 GET /health/ready",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Health",
+      "test": "就绪探针响应结构",
+      "status": "FAIL",
+      "error": "code should be OK, got None"
+    },
+    {
+      "module": "Auth",
+      "test": "admin登录 POST /auth/login",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Auth",
+      "test": "登录响应结构",
+      "status": "PASS"
+    },
+    {
+      "module": "Auth",
+      "test": "错误密码登录 → 401",
+      "status": "PASS",
+      "code": 401
+    },
+    {
+      "module": "Auth",
+      "test": "空用户名登录 → 422 参数校验",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Auth",
+      "test": "缺少password字段 → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Auth",
+      "test": "获取当前用户 GET /auth/me",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Auth",
+      "test": "无token访问 /me → 401",
+      "status": "PASS",
+      "code": 401
+    },
+    {
+      "module": "Auth",
+      "test": "无效token访问 /me → 401",
+      "status": "PASS",
+      "code": 401
+    },
+    {
+      "module": "Auth",
+      "test": "注册新用户 POST /auth/register",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Auth",
+      "test": "重复用户名注册 → 409",
+      "status": "PASS",
+      "code": 409
+    },
+    {
+      "module": "Auth",
+      "test": "无效邮箱格式 → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Auth",
+      "test": "密码过短 → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Auth",
+      "test": "无效角色注册 → 400",
+      "status": "PASS",
+      "code": 400
+    },
+    {
+      "module": "Rules",
+      "test": "获取规则列表 GET /rules",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Rules",
+      "test": "规则列表分页结构",
+      "status": "PASS"
+    },
+    {
+      "module": "Rules",
+      "test": "获取规则树 GET /rules/tree",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Rules",
+      "test": "规则树响应结构",
+      "status": "PASS"
+    },
+    {
+      "module": "Rules",
+      "test": "创建规则 POST /rules",
+      "status": "PASS",
+      "code": 201
+    },
+    {
+      "module": "Rules",
+      "test": "analyst创建规则 → 403",
+      "status": "PASS",
+      "code": 403
+    },
+    {
+      "module": "Rules",
+      "test": "缺少rule_name → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Rules",
+      "test": "无效规则类型 → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Rules",
+      "test": "更新规则 PUT /rules/{id}",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Rules",
+      "test": "更新不存在的规则 → 404",
+      "status": "PASS",
+      "code": 404
+    },
+    {
+      "module": "Rules",
+      "test": "禁用规则 POST /rules/{id}/toggle",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Rules",
+      "test": "启用规则 POST /rules/{id}/toggle",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Rules",
+      "test": "获取版本历史 GET /rules/{id}/versions",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Rules",
+      "test": "版本历史响应结构",
+      "status": "PASS"
+    },
+    {
+      "module": "Rules",
+      "test": "page=0 → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Rules",
+      "test": "page_size=200 → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "RawData",
+      "test": "获取原始数据列表 GET /raw-data",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "RawData",
+      "test": "原始数据列表分页结构",
+      "status": "PASS"
+    },
+    {
+      "module": "RawData",
+      "test": "创建原始数据 POST /raw-data",
+      "status": "PASS",
+      "code": 201
+    },
+    {
+      "module": "RawData",
+      "test": "获取原始数据详情 GET /raw-data/{id}",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "RawData",
+      "test": "获取不存在的数据 → 404",
+      "status": "PASS",
+      "code": 404
+    },
+    {
+      "module": "RawData",
+      "test": "按status筛选 pending",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "RawData",
+      "test": "筛选结果分页结构",
+      "status": "PASS"
+    },
+    {
+      "module": "RawData",
+      "test": "按source筛选",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "RawData",
+      "test": "source筛选结果结构",
+      "status": "PASS"
+    },
+    {
+      "module": "RawData",
+      "test": "关键词搜索",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "RawData",
+      "test": "空payload创建 → 201",
+      "status": "PASS",
+      "code": 201
+    },
+    {
+      "module": "RawData",
+      "test": "大数据payload创建",
+      "status": "PASS",
+      "code": 201
+    },
+    {
+      "module": "Risk",
+      "test": "获取分析结果列表 GET /risk/analyze",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Risk",
+      "test": "分析列表分页结构",
+      "status": "PASS"
+    },
+    {
+      "module": "Risk",
+      "test": "提交风险评估 POST /risk/analyze",
+      "status": "FAIL",
+      "code": 500,
+      "error": "expected 200, got 500. Body: {'code': 'ERR_UNKNOWN', 'message': '服务器内部错误', 'detail': {'error': \"'NoneType' object has no attribute 'get'\"}, 'trace_id': '3464aaf6-c172-4957-ae3c-b1374ca023fb'}"
+    },
+    {
+      "module": "Risk",
+      "test": "不存在raw_data_id → 404",
+      "status": "PASS",
+      "code": 404
+    },
+    {
+      "module": "Risk",
+      "test": "缺少raw_data_id → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Risk",
+      "test": "查询不存在分析结果 → 404",
+      "status": "PASS",
+      "code": 404
+    },
+    {
+      "module": "Risk",
+      "test": "批量风险评估 POST /risk/analyze/batch",
+      "status": "FAIL",
+      "code": 500,
+      "error": "expected 200, got 500. Body: {'code': 'ERR_UNKNOWN', 'message': '服务器内部错误', 'detail': {'error': \"'NoneType' object has no attribute 'get'\"}, 'trace_id': '64e71a86-eac8-4dec-85bc-f0bcfc67c71d'}"
+    },
+    {
+      "module": "Risk",
+      "test": "空批量ID列表 → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Risk",
+      "test": "page=0 → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Decision",
+      "test": "获取决策列表 GET /decision",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Decision",
+      "test": "决策列表分页结构",
+      "status": "PASS"
+    },
+    {
+      "module": "Decision",
+      "test": "不存在request_id决策 → 404",
+      "status": "PASS",
+      "code": 404
+    },
+    {
+      "module": "Decision",
+      "test": "缺少request_id → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Decision",
+      "test": "查询不存在决策 → 404",
+      "status": "PASS",
+      "code": 404
+    },
+    {
+      "module": "Review",
+      "test": "获取待审核列表 GET /review/pending",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Review",
+      "test": "待审核列表分页结构",
+      "status": "PASS"
+    },
+    {
+      "module": "Review",
+      "test": "无认证审核 → 401",
+      "status": "PASS",
+      "code": 401
+    },
+    {
+      "module": "Review",
+      "test": "审核不存在ID → 404",
+      "status": "PASS",
+      "code": 404
+    },
+    {
+      "module": "Review",
+      "test": "审核缺少action → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Review",
+      "test": "无效action → 422",
+      "status": "PASS",
+      "code": 422
+    },
+    {
+      "module": "Review",
+      "test": "覆盖不存在ID → 404",
+      "status": "PASS",
+      "code": 404
+    },
+    {
+      "module": "Dashboard",
+      "test": "汇总统计 GET /dashboard/summary",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Dashboard",
+      "test": "汇总统计响应结构",
+      "status": "PASS"
+    },
+    {
+      "module": "Dashboard",
+      "test": "趋势数据 GET /dashboard/trends?days=7",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Dashboard",
+      "test": "趋势数据响应结构",
+      "status": "PASS"
+    },
+    {
+      "module": "Dashboard",
+      "test": "趋势数据 days=0 边界",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Dashboard",
+      "test": "趋势数据 days=365 边界",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Dashboard",
+      "test": "告警列表 GET /dashboard/alerts?limit=10",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Dashboard",
+      "test": "告警列表响应结构",
+      "status": "PASS"
+    },
+    {
+      "module": "Dashboard",
+      "test": "告警列表 limit=0 边界",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "Dashboard",
+      "test": "告警列表 limit=1000 边界",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "UserMgmt",
+      "test": "获取用户列表 GET /users",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "UserMgmt",
+      "test": "用户列表分页结构",
+      "status": "PASS"
+    },
+    {
+      "module": "UserMgmt",
+      "test": "analyst获取用户列表 → 403",
+      "status": "PASS",
+      "code": 403
+    },
+    {
+      "module": "UserMgmt",
+      "test": "无认证获取用户列表 → 401",
+      "status": "PASS",
+      "code": 401
+    },
+    {
+      "module": "UserMgmt",
+      "test": "按role=admin筛选",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "UserMgmt",
+      "test": "角色筛选结果结构",
+      "status": "PASS"
+    },
+    {
+      "module": "UserMgmt",
+      "test": "搜索用户 admin",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "UserMgmt",
+      "test": "创建用户 POST /users",
+      "status": "PASS",
+      "code": 201
+    },
+    {
+      "module": "UserMgmt",
+      "test": "重复用户名创建 → 409",
+      "status": "PASS",
+      "code": 409
+    },
+    {
+      "module": "UserMgmt",
+      "test": "无效角色创建 → 400",
+      "status": "PASS",
+      "code": 400
+    },
+    {
+      "module": "UserMgmt",
+      "test": "更新用户 PUT /users/{id}",
+      "status": "PASS",
+      "code": 200
+    },
+    {
+      "module": "UserMgmt",
+      "test": "更新不存在用户 → 404",
+      "status": "PASS",
+      "code": 404
+    },
+    {
+      "module": "Perf",
+      "test": "GET http://localhost:8000/health/live",
+      "status": "FAIL",
+      "avg_ms": 2053.1,
+      "max_ms": 2058.4
+    },
+    {
+      "module": "Perf",
+      "test": "GET http://localhost:8000/api/v1/dashboard/summary",
+      "status": "FAIL",
+      "avg_ms": 2065.2,
+      "max_ms": 2075.1
+    },
+    {
+      "module": "Perf",
+      "test": "GET http://localhost:8000/api/v1/rules/tree",
+      "status": "FAIL",
+      "avg_ms": 2060.7,
+      "max_ms": 2072.8
+    },
+    {
+      "module": "Perf",
+      "test": "GET http://localhost:8000/api/v1/raw-data?page=1&page_size=5",
+      "status": "FAIL",
+      "avg_ms": 2062.5,
+      "max_ms": 2081.1
+    }
+  ],
+  "start_time": "2026-08-11T21:55:47.351574",
+  "end_time": "2026-08-11T21:59:17.493788",
+  "pass_rate": "91.5%",
+  "total": 106
+}
