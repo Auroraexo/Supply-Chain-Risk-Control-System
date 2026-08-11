@@ -25,7 +25,7 @@ export function AnalysisList() {
     setLoading(true);
     try {
       const res = await analysisService.list({ page: 1, page_size: 50 });
-      setAnalyses(res.data.items);
+      setAnalyses(res?.data?.items || []);
     } catch (error) {
       console.error('Failed to fetch analyses:', error);
       addToast({ type: 'error', title: '加载失败', message: '无法获取分析结果' });

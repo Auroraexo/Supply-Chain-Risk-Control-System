@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
 
     # === CORS ===
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000"
 
     # === LLM ===
     LLM_PROVIDER: str = "openai"  # openai / anthropic / azure_openai / local

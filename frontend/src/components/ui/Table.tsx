@@ -12,8 +12,8 @@ interface TableProps<T> {
 }
 
 export function Table<T>({
-  columns,
-  data,
+  columns = [],
+  data = [],
   keyExtractor,
   loading = false,
   emptyText = '暂无数据',

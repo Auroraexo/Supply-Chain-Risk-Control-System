@@ -41,7 +41,7 @@ export function UserManagement() {
         page: 1,
         page_size: 50,
       });
-      setUsers(res.data.items);
+      setUsers(res?.data?.items || []);
     } catch (error) {
       console.error('Failed to fetch users:', error);
       addToast({ type: 'error', title: '加载失败', message: '无法获取用户列表' });

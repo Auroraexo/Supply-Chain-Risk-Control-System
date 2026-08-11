@@ -72,7 +72,7 @@ export function RawDataList() {
         page: 1,
         page_size: 50,
       });
-      setData(res.data.items);
+      setData(res?.data?.items || []);
     } catch (error) {
       console.error('Failed to fetch raw data:', error);
       addToast({ type: 'error', title: '加载失败', message: '无法获取数据列表' });

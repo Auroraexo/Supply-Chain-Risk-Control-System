@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { ToastContainer } from '@/components/ui/Toast';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { clsx } from 'clsx';
 
@@ -20,7 +21,9 @@ export function AppLayout() {
       >
         <Header />
         <main className="p-4 lg:p-6 max-w-[1400px] mx-auto">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
       <ToastContainer />

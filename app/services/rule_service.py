@@ -26,11 +26,11 @@ class RuleService:
             total,
         )
 
-    async def get_tree(self) -> dict | None:
+    async def get_tree(self) -> list[dict]:
         roots = await self.rule_repo.get_root_nodes()
         if not roots:
-            return None
-        return self._rule_to_dict(roots[0], include_children=True)
+            return []
+        return [self._rule_to_dict(root, include_children=True) for root in roots]
 
     async def create_rule(self, request: RuleCreateRequest) -> dict:
         rule = RuleNode(

@@ -32,7 +32,7 @@ export function DecisionList() {
     setLoading(true);
     try {
       const res = await decisionService.list({ page: 1, page_size: 50 });
-      setDecisions(res.data.items);
+      setDecisions(res?.data?.items || []);
     } catch (error) {
       console.error('Failed to fetch decisions:', error);
     } finally {
