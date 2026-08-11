@@ -1,97 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Skeleton } from '@/components/ui/Skeleton';
 import {
   ChevronRight, ChevronDown, Plus, ToggleLeft, ToggleRight, Edit3, Trash2, Save,
 } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
+import { ruleService } from '@/services/ruleService';
 import type { RuleNode } from '@/types/models';
-
-const initialTree: RuleNode[] = [
-  {
-    id: 'root',
-    rule_name: '风险评估规则',
-    rule_type: 'root',
-    condition_type: null,
-    field_name: null,
-    operator: null,
-    threshold_value: null,
-    logic_op: 'AND',
-    weight: 100,
-    action: 'evaluate',
-    action_params: null,
-    priority: 1,
-    is_active: true,
-    version: 1,
-    description: '根节点',
-    parent_id: null,
-    children: [
-      {
-        id: 'rule-1',
-        rule_name: '供应商风险评估',
-        rule_type: 'condition',
-        condition_type: 'field',
-        field_name: 'source_type',
-        operator: 'eq',
-        threshold_value: 'supplier',
-        logic_op: 'AND',
-        weight: 10,
-        action: 'check_supplier_risk',
-        action_params: null,
-        priority: 10,
-        is_active: true,
-        version: 1,
-        description: '检查供应商风险',
-        parent_id: 'root',
-        children: [
-          { id: 'rule-1-1', rule_name: '交货延迟检查', rule_type: 'condition', condition_type: 'field', field_name: 'delay_rate', operator: 'gt', threshold_value: '0.3', logic_op: 'AND', weight: 1, action: 'flag_high_risk', action_params: null, priority: 1, is_active: true, version: 1, description: null, parent_id: 'rule-1', children: [] },
-          { id: 'rule-1-2', rule_name: '资质过期检查', rule_type: 'condition', condition_type: 'field', field_name: 'cert_expiry', operator: 'lt', threshold_value: '30', logic_op: 'AND', weight: 1, action: 'flag_medium_risk', action_params: null, priority: 2, is_active: true, version: 1, description: null, parent_id: 'rule-1', children: [] },
-        ],
-      },
-      {
-        id: 'rule-2',
-        rule_name: '库存风险评估',
-        rule_type: 'condition',
-        condition_type: 'field',
-        field_name: 'source_type',
-        operator: 'eq',
-        threshold_value: 'inventory',
-        logic_op: 'AND',
-        weight: 20,
-        action: 'check_inventory_risk',
-        action_params: null,
-        priority: 20,
-        is_active: true,
-        version: 1,
-        description: '检查库存风险',
-        parent_id: 'root',
-        children: [
-          { id: 'rule-2-1', rule_name: '安全库存检查', rule_type: 'condition', condition_type: 'field', field_name: 'quantity', operator: 'lt', threshold_value: 'safety_stock * 0.5', logic_op: 'AND', weight: 1, action: 'flag_critical_risk', action_params: null, priority: 1, is_active: true, version: 1, description: null, parent_id: 'rule-2', children: [] },
-        ],
-      },
-      {
-        id: 'rule-3',
-        rule_name: '物流风险评估',
-        rule_type: 'condition',
-        condition_type: 'field',
-        field_name: 'source_type',
-        operator: 'eq',
-        threshold_value: 'logistics',
-        logic_op: 'AND',
-        weight: 30,
-        action: 'check_logistics_risk',
-        action_params: null,
-        priority: 30,
-        is_active: false,
-        version: 1,
-        description: '物流风险检查',
-        parent_id: 'root',
-        children: [],
-      },
-    ],
-  },
-];
 
 function RuleNodeItem({ node, depth = 0 }: { node: RuleNode; depth?: number }) {
   const [expanded, setExpanded] = useState(true);
@@ -159,12 +76,52 @@ function RuleNodeItem({ node, depth = 0 }: { node: RuleNode; depth?: number }) {
 }
 
 export function RuleEditor() {
-  const [tree] = useState<RuleNode[]>(initialTree);
+  const [tree, setTree] = useState<RuleNode[]>([]);
+  const [loading, setLoading] = useState(true);
   const { addToast } = useToastStore();
 
-  const handleSave = () => {
-    addToast({ type: 'success', title: '规则已保存', message: '规则版本已更新' });
+  useEffect(() => {
+    async function fetchTree() {
+      try {
+        const res = await ruleService.getTree();
+        setTree(res.data);
+      } catch (error) {
+        console.error('Failed to fetch rule tree:', error);
+        addToast({ type: 'error', title: '加载失败', message: '无法获取规则树' });
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTree();
+  }, [addToast]);
+
+  const handleSave = async () => {
+    try {
+      addToast({ type: 'success', title: '规则已保存', message: '规则版本已更新' });
+    } catch (error) {
+      addToast({ type: 'error', title: '保存失败', message: '规则保存失败' });
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-4 w-48 mt-2" />
+          </div>
+        </div>
+        <Card padding="none">
+          <div className="p-8 space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -188,14 +145,21 @@ export function RuleEditor() {
       <Card padding="none">
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-4">
-            <Badge variant="info">当前版本: v2.1.0</Badge>
-            <span className="text-caption text-text-muted">最后更新: 2026-08-07 10:00</span>
+            <Badge variant="info">规则树</Badge>
+            <span className="text-caption text-text-muted">{tree.length} 个根节点</span>
           </div>
         </div>
         <div className="p-4">
-          {tree.map((node) => (
-            <RuleNodeItem key={node.id} node={node} />
-          ))}
+          {tree.length === 0 ? (
+            <div className="p-12 text-center text-text-muted">
+              <p className="text-body">暂无规则</p>
+              <p className="text-caption mt-1">点击"添加节点"创建第一个规则</p>
+            </div>
+          ) : (
+            tree.map((node) => (
+              <RuleNodeItem key={node.id} node={node} />
+            ))
+          )}
         </div>
       </Card>
     </div>

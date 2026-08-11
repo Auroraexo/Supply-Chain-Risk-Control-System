@@ -1,17 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
-import { RiskLevelBadge } from '@/components/business/RiskLevelBadge';
-import type { DecisionResult, DecisionStatus } from '@/types/models';
-
-const mockDecisions: DecisionResult[] = [
-  { id: '1', request_id: 'REQ-001', analysis_id: '1', decision: 'pending_review', confidence: 0.82, explanation: '高风险项需要人工审核', decision_path: null, reflection_passed: null, reviewed_by: null, created_at: '2026-08-07T10:36:00Z', updated_at: null },
-  { id: '2', request_id: 'REQ-003', analysis_id: '3', decision: 'approve', confidence: 0.95, explanation: '低风险自动通过', decision_path: ['rule-1'], reflection_passed: true, reviewed_by: null, created_at: '2026-08-07T08:06:00Z', updated_at: '2026-08-07T08:06:05Z' },
-  { id: '3', request_id: 'REQ-005', analysis_id: '4', decision: 'reject', confidence: 0.88, explanation: '严重风险自动拒绝', decision_path: ['rule-2'], reflection_passed: true, reviewed_by: null, created_at: '2026-08-06T14:26:00Z', updated_at: '2026-08-06T14:26:10Z' },
-  { id: '4', request_id: 'REQ-006', analysis_id: '5', decision: 'escalate', confidence: 0.60, explanation: '需要升级处理', decision_path: null, reflection_passed: false, reviewed_by: 'user-1', created_at: '2026-08-06T12:00:00Z', updated_at: '2026-08-06T15:00:00Z' },
-];
+import { Skeleton } from '@/components/ui/Skeleton';
+import { Search } from 'lucide-react';
+import { decisionService } from '@/services/decisionService';
+import type { DecisionResult } from '@/types/models';
 
 const statusConfig: Record<string, { label: string; variant: 'info' | 'success' | 'high' | 'default' }> = {
   pending_review: { label: '待审批', variant: 'info' },
@@ -28,10 +23,28 @@ const typeLabels: Record<string, string> = {
 };
 
 export function DecisionList() {
+  const [decisions, setDecisions] = useState<DecisionResult[]>([]);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const navigate = useNavigate();
 
-  const filtered = mockDecisions.filter((d) => {
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await decisionService.list({ page: 1, page_size: 50 });
+      setDecisions(res.data.items);
+    } catch (error) {
+      console.error('Failed to fetch decisions:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const filtered = decisions.filter((d) => {
     if (statusFilter && d.decision !== statusFilter) return false;
     return true;
   });
@@ -59,37 +72,50 @@ export function DecisionList() {
           />
         </div>
 
-        <div className="divide-y divide-border/30">
-          {filtered.map((decision) => {
-            const cfg = statusConfig[decision.decision] || { label: decision.decision, variant: 'default' as const };
-            return (
-              <div
-                key={decision.id}
-                className="flex items-center gap-4 p-4 hover:bg-bg-tertiary/20 cursor-pointer transition-colors"
-                onClick={() => navigate(`/decisions/${decision.id}`)}
-              >
-                <Badge variant={cfg.variant} dot={decision.decision === 'pending_review'}>
-                  {cfg.label}
-                </Badge>
-                <div className="flex-1 min-w-0">
-                  <p className="text-body font-medium text-text-primary">{decision.request_id}</p>
-                  <p className="text-caption text-text-secondary mt-1 line-clamp-1">{decision.explanation}</p>
+        {loading ? (
+          <div className="p-8 space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center text-text-muted">
+            <Search size={32} className="mx-auto mb-3 opacity-40" />
+            <p className="text-body">暂无决策记录</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/30">
+            {filtered.map((decision) => {
+              const cfg = statusConfig[decision.decision] || { label: decision.decision, variant: 'default' as const };
+              return (
+                <div
+                  key={decision.id}
+                  className="flex items-center gap-4 p-4 hover:bg-bg-tertiary/20 cursor-pointer transition-colors"
+                  onClick={() => navigate(`/decisions/${decision.id}`)}
+                >
+                  <Badge variant={cfg.variant} dot={decision.decision === 'pending_review'}>
+                    {cfg.label}
+                  </Badge>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-body font-medium text-text-primary">{decision.request_id}</p>
+                    <p className="text-caption text-text-secondary mt-1 line-clamp-1">{decision.explanation}</p>
+                  </div>
+                  <div className="hidden sm:block">
+                    <Badge variant="default">{typeLabels[decision.decision]}</Badge>
+                  </div>
+                  <div className="hidden md:block text-right">
+                    <p className="text-caption text-text-muted">
+                      {new Date(decision.created_at).toLocaleDateString('zh-CN')}
+                    </p>
+                    <p className="text-caption text-text-muted">
+                      {new Date(decision.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
                 </div>
-                <div className="hidden sm:block">
-                  <Badge variant="default">{typeLabels[decision.decision]}</Badge>
-                </div>
-                <div className="hidden md:block text-right">
-                  <p className="text-caption text-text-muted">
-                    {new Date(decision.created_at).toLocaleDateString('zh-CN')}
-                  </p>
-                  <p className="text-caption text-text-muted">
-                    {new Date(decision.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
     </div>
   );

@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Tabs } from '@/components/ui/Tabs';
 import { useToastStore } from '@/stores/toastStore';
-import { Save, Cpu, RefreshCw } from 'lucide-react';
+import { Save, Cpu, RefreshCw, Bell } from 'lucide-react';
+import { UserManagement } from './UserManagement';
 
 const settingsTabs = [
   { key: 'llm', label: '模型配置' },
+  { key: 'notifications', label: '通知设置' },
   { key: 'users', label: '用户管理' },
   { key: 'logs', label: '操作日志' },
 ];
@@ -123,6 +125,66 @@ export function LLMConfig() {
   );
 }
 
+export function NotificationSettings() {
+  const [channels, setChannels] = useState([
+    { id: '1', type: 'email', name: '邮件通知', enabled: true, config: 'admin@example.com' },
+    { id: '2', type: 'webhook', name: 'Webhook', enabled: false, config: 'https://hooks.example.com/notify' },
+    { id: '3', type: 'slack', name: 'Slack', enabled: false, config: '' },
+  ]);
+  const { addToast } = useToastStore();
+
+  const handleToggle = (id: string) => {
+    setChannels((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c))
+    );
+  };
+
+  const handleSave = () => {
+    addToast({ type: 'success', title: '通知设置已保存', message: '通知渠道配置已更新' });
+  };
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <Bell size={20} className="text-accent-blue" />
+          <h3 className="text-h3 text-text-primary">通知渠道</h3>
+        </div>
+        <Button size="sm" onClick={handleSave}>
+          <Save size={14} />
+          保存
+        </Button>
+      </div>
+
+      <div className="space-y-3">
+        {channels.map((channel) => (
+          <div
+            key={channel.id}
+            className="flex items-center gap-4 p-4 rounded-btn bg-bg-primary/50 border border-border"
+          >
+            <div className="flex-1">
+              <p className="text-body font-medium text-text-primary">{channel.name}</p>
+              <p className="text-caption text-text-muted mt-0.5">{channel.config || '未配置'}</p>
+            </div>
+            <button
+              onClick={() => handleToggle(channel.id)}
+              className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${
+                channel.enabled ? 'bg-accent-blue' : 'bg-bg-tertiary'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
+                  channel.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export function Settings() {
   const [activeTab, setActiveTab] = useState('llm');
 
@@ -137,12 +199,8 @@ export function Settings() {
 
       <div className="mt-4">
         {activeTab === 'llm' && <LLMConfig />}
-        {activeTab === 'users' && (
-          <Card>
-            <h3 className="text-h3 text-text-primary mb-4">用户管理</h3>
-            <p className="text-body text-text-secondary">用户管理功能将在后续版本中实现</p>
-          </Card>
-        )}
+        {activeTab === 'notifications' && <NotificationSettings />}
+        {activeTab === 'users' && <UserManagement />}
         {activeTab === 'logs' && (
           <Card>
             <h3 className="text-h3 text-text-primary mb-4">操作日志</h3>

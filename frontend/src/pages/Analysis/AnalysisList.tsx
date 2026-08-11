@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Search } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -8,23 +8,37 @@ import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { RiskLevelBadge } from '@/components/business/RiskLevelBadge';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useToastStore } from '@/stores/toastStore';
+import { analysisService } from '@/services/analysisService';
 import type { AnalysisResult } from '@/types/models';
 
-const mockAnalyses: AnalysisResult[] = [
-  { id: '1', request_id: 'REQ-001', raw_data_id: '1', risk_level: 'high', risk_score: 0.82, anomaly_tags: ['供应商延迟'], reasoning: '供应商A历史交货延迟率超过30%', facts_summary: null, created_at: '2026-08-07T10:35:00Z', updated_at: '2026-08-07T10:36:00Z' },
-  { id: '2', request_id: 'REQ-002', raw_data_id: '2', risk_level: 'medium', risk_score: 0.55, anomaly_tags: ['价格波动'], reasoning: '原材料价格波动在可接受范围内', facts_summary: null, created_at: '2026-08-07T09:20:00Z', updated_at: null },
-  { id: '3', request_id: 'REQ-003', raw_data_id: '3', risk_level: 'low', risk_score: 0.15, anomaly_tags: ['物流正常'], reasoning: '物流时效在正常范围内', facts_summary: null, created_at: '2026-08-07T08:05:00Z', updated_at: '2026-08-07T08:06:00Z' },
-  { id: '4', request_id: 'REQ-005', raw_data_id: '5', risk_level: 'critical', risk_score: 0.95, anomaly_tags: ['库存严重不足'], reasoning: '关键物料库存低于安全线50%', facts_summary: null, created_at: '2026-08-06T14:25:00Z', updated_at: '2026-08-06T14:26:00Z' },
-];
-
 export function AnalysisList() {
+  const [analyses, setAnalyses] = useState<AnalysisResult[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [riskFilter, setRiskFilter] = useState('');
   const { addToast } = useToastStore();
   const navigate = useNavigate();
 
-  const filtered = mockAnalyses.filter((a) => {
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await analysisService.list({ page: 1, page_size: 50 });
+      setAnalyses(res.data.items);
+    } catch (error) {
+      console.error('Failed to fetch analyses:', error);
+      addToast({ type: 'error', title: '加载失败', message: '无法获取分析结果' });
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const filtered = analyses.filter((a) => {
     if (search && !a.request_id.toLowerCase().includes(search.toLowerCase())) return false;
     if (riskFilter && a.risk_level !== riskFilter) return false;
     return true;
@@ -69,44 +83,58 @@ export function AnalysisList() {
           />
         </div>
 
-        <div className="divide-y divide-border/30">
-          {filtered.map((analysis) => (
-            <div
-              key={analysis.id}
-              className="flex items-center gap-4 p-4 hover:bg-bg-tertiary/20 cursor-pointer transition-colors"
-              onClick={() => navigate(`/analysis/${analysis.id}`)}
-            >
-              <div className="flex-shrink-0">
-                <RiskLevelBadge level={analysis.risk_level} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-body font-medium text-text-primary">{analysis.request_id}</span>
-                  <Badge variant={analysis.updated_at ? 'success' : 'info'} dot={!analysis.updated_at}>
-                    {analysis.updated_at ? '已完成' : '分析中'}
-                  </Badge>
+        {loading ? (
+          <div className="p-8 space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center text-text-muted">
+            <Search size={32} className="mx-auto mb-3 opacity-40" />
+            <p className="text-body">暂无分析结果</p>
+            <p className="text-caption mt-1">点击"新建分析"创建第一个分析任务</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/30">
+            {filtered.map((analysis) => (
+              <div
+                key={analysis.id}
+                className="flex items-center gap-4 p-4 hover:bg-bg-tertiary/20 cursor-pointer transition-colors"
+                onClick={() => navigate(`/analysis/${analysis.id}`)}
+              >
+                <div className="flex-shrink-0">
+                  <RiskLevelBadge level={analysis.risk_level} />
                 </div>
-                <p className="text-caption text-text-secondary mt-1 line-clamp-1">
-                  {analysis.anomaly_tags?.join('、') || analysis.reasoning?.slice(0, 60) || '暂无描述'}
-                </p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-body font-medium text-text-primary">{analysis.request_id}</span>
+                    <Badge variant={analysis.updated_at ? 'success' : 'info'} dot={!analysis.updated_at}>
+                      {analysis.updated_at ? '已完成' : '分析中'}
+                    </Badge>
+                  </div>
+                  <p className="text-caption text-text-secondary mt-1 line-clamp-1">
+                    {analysis.anomaly_tags?.join('、') || analysis.reasoning?.slice(0, 60) || '暂无描述'}
+                  </p>
+                </div>
+                <div className="hidden sm:block w-32">
+                  <ProgressBar value={analysis.risk_score * 100} size="sm" variant={
+                    analysis.risk_level === 'critical' ? 'red' : analysis.risk_level === 'high' ? 'amber' : 'green'
+                  } showLabel />
+                  <p className="text-caption text-text-muted mt-1 text-center">风险评分</p>
+                </div>
+                <div className="hidden md:block text-right">
+                  <p className="text-caption text-text-muted">
+                    {new Date(analysis.created_at).toLocaleDateString('zh-CN')}
+                  </p>
+                  <p className="text-caption text-text-muted">
+                    {new Date(analysis.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
               </div>
-              <div className="hidden sm:block w-32">
-                <ProgressBar value={analysis.risk_score * 100} size="sm" variant={
-                  analysis.risk_level === 'critical' ? 'red' : analysis.risk_level === 'high' ? 'amber' : 'green'
-                } showLabel />
-                <p className="text-caption text-text-muted mt-1 text-center">风险评分</p>
-              </div>
-              <div className="hidden md:block text-right">
-                <p className="text-caption text-text-muted">
-                  {new Date(analysis.created_at).toLocaleDateString('zh-CN')}
-                </p>
-                <p className="text-caption text-text-muted">
-                  {new Date(analysis.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );

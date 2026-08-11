@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { RiskLevelBadge } from '@/components/business/RiskLevelBadge';
+import { Skeleton } from '@/components/ui/Skeleton';
 import {
   AlertTriangle, TrendingUp, Clock, GitBranch, Shield, ArrowRight, Activity, Scale,
 } from 'lucide-react';
+import { dashboardService } from '@/services/dashboardService';
 import type { DashboardSummary, RiskTrendPoint, AlertItem } from '@/types/models';
 
 function StatCard({
@@ -97,32 +99,64 @@ function TrendChart({ data }: { data: RiskTrendPoint[] }) {
 }
 
 export function Dashboard() {
-  const [summary] = useState<DashboardSummary>({
-    total_risks: 128,
-    critical_count: 3,
-    high_count: 12,
-    medium_count: 45,
-    low_count: 68,
-    pending_decisions: 7,
-    active_rules: 24,
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [trends, setTrends] = useState<RiskTrendPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [summaryRes, alertsRes, trendsRes] = await Promise.all([
+          dashboardService.getSummary(),
+          dashboardService.getAlerts(10),
+          dashboardService.getTrends(7),
+        ]);
+        setSummary(summaryRes.data);
+        setAlerts(alertsRes.data);
+        setTrends(trendsRes.data);
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-4 w-48 mt-2" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} glass>
+              <Skeleton className="h-4 w-20 mb-3" />
+              <Skeleton className="h-8 w-16" />
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const defaultSummary: DashboardSummary = {
+    total_risks: 0,
+    critical_count: 0,
+    high_count: 0,
+    medium_count: 0,
+    low_count: 0,
+    pending_decisions: 0,
+    active_rules: 0,
     last_updated: new Date().toISOString(),
-  });
-  const [alerts] = useState<AlertItem[]>([
-    { id: '1', type: 'critical', title: '供应商A交货延迟', description: '预计延迟7天，影响产线B', created_at: new Date().toISOString() },
-    { id: '2', type: 'high', title: '原材料价格波动超阈值', description: '钢材价格上涨15%', created_at: new Date(Date.now() - 3600000).toISOString() },
-    { id: '3', type: 'medium', title: '物流时效下降', description: '华东区域平均时效增加2天', created_at: new Date(Date.now() - 7200000).toISOString() },
-    { id: '4', type: 'low', title: '库存水平正常', description: '所有仓库库存处于安全线以上', created_at: new Date(Date.now() - 10800000).toISOString() },
-    { id: '5', type: 'high', title: '供应商C资质过期', description: 'ISO认证将于30天后到期', created_at: new Date(Date.now() - 14400000).toISOString() },
-  ]);
-  const [trends] = useState<RiskTrendPoint[]>(
-    Array.from({ length: 7 }, (_, i) => ({
-      date: new Date(Date.now() - (6 - i) * 86400000).toISOString().slice(0, 10),
-      critical: Math.floor(Math.random() * 3),
-      high: Math.floor(Math.random() * 5),
-      medium: Math.floor(Math.random() * 10),
-      low: Math.floor(Math.random() * 15),
-    }))
-  );
+  };
+
+  const displaySummary = summary || defaultSummary;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -144,27 +178,27 @@ export function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="总风险数"
-          value={summary.total_risks}
+          value={displaySummary.total_risks}
           icon={<AlertTriangle size={16} className="text-accent-cyan" />}
           accent="#06B6D4"
-          trend={`上次更新: ${new Date(summary.last_updated).toLocaleDateString('zh-CN')}`}
+          trend={`上次更新: ${new Date(displaySummary.last_updated).toLocaleDateString('zh-CN')}`}
         />
         <StatCard
           label="严重/高风险"
-          value={`${summary.critical_count + summary.high_count}`}
+          value={`${displaySummary.critical_count + displaySummary.high_count}`}
           icon={<TrendingUp size={16} className="text-risk-critical" />}
           accent="#EF4444"
-          trend={`严重 ${summary.critical_count} · 高 ${summary.high_count}`}
+          trend={`严重 ${displaySummary.critical_count} · 高 ${displaySummary.high_count}`}
         />
         <StatCard
           label="待处理决策"
-          value={summary.pending_decisions}
+          value={displaySummary.pending_decisions}
           icon={<Clock size={16} className="text-risk-medium" />}
           accent="#F59E0B"
         />
         <StatCard
           label="活跃规则"
-          value={summary.active_rules}
+          value={displaySummary.active_rules}
           icon={<GitBranch size={16} className="text-accent-purple" />}
           accent="#8B5CF6"
         />

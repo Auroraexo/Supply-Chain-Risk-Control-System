@@ -10,5 +10,5 @@ export const ruleService = {
   delete: (ruleId: string) => del<void>(`/rules/${ruleId}`),
   toggle: (ruleId: string, isActive: boolean) => post<RuleNode>(`/rules/${ruleId}/toggle`, { is_active: isActive }),
   getVersions: (ruleId: string) => get<RuleVersion[]>(`/rules/${ruleId}/versions`),
-  rollback: (ruleId: string, version: number) => post<RuleNode>(`/rules/${ruleId}/rollback`, null, { version }),
+  rollback: (ruleId: string, version: number) => post<RuleNode>(`/rules/${ruleId}/rollback?version=${version}`, null),
 };

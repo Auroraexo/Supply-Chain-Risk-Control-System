@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Upload, Download, Trash2, Eye } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -8,17 +8,11 @@ import { Select } from '@/components/ui/Select';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useToastStore } from '@/stores/toastStore';
+import { dataService } from '@/services/dataService';
 import type { RawData, DataStatus } from '@/types/models';
 import type { TableColumn } from '@/types/common';
-
-const mockData: RawData[] = [
-  { id: '1', source_type: 'ERP系统', source_id: 'ERP-001', payload: {}, data_hash: '', status: 'completed', quality_score: 0.95, created_at: '2026-08-07T10:30:00Z', updated_at: '2026-08-07T10:30:00Z', processed_at: null },
-  { id: '2', source_type: '供应商API', source_id: 'SUP-002', payload: {}, data_hash: '', status: 'processing', quality_score: null, created_at: '2026-08-07T09:15:00Z', updated_at: '2026-08-07T09:20:00Z', processed_at: null },
-  { id: '3', source_type: '物流平台', source_id: 'LOG-003', payload: {}, data_hash: '', status: 'completed', quality_score: 0.88, created_at: '2026-08-07T08:00:00Z', updated_at: '2026-08-07T08:05:00Z', processed_at: null },
-  { id: '4', source_type: '手动录入', source_id: '', payload: {}, data_hash: '', status: 'pending', quality_score: null, created_at: '2026-08-06T16:45:00Z', updated_at: '2026-08-06T16:45:00Z', processed_at: null },
-  { id: '5', source_type: 'ERP系统', source_id: 'ERP-005', payload: {}, data_hash: '', status: 'failed', quality_score: null, created_at: '2026-08-06T14:20:00Z', updated_at: '2026-08-06T14:21:00Z', processed_at: null },
-];
 
 const statusConfig: Record<DataStatus, { label: string; variant: 'info' | 'success' | 'default' | 'high' }> = {
   pending: { label: '待处理', variant: 'default' },
@@ -47,12 +41,12 @@ const columns: TableColumn<RawData>[] = [
   {
     key: 'actions',
     header: '操作',
-    render: () => (
+    render: (row) => (
       <div className="flex items-center gap-1">
-        <button className="p-1.5 rounded-btn text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 transition-colors">
+        <button className="p-1.5 rounded-btn text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 transition-colors" onClick={(e) => { e.stopPropagation(); }}>
           <Eye size={16} />
         </button>
-        <button className="p-1.5 rounded-btn text-text-muted hover:text-risk-critical hover:bg-risk-critical/10 transition-colors">
+        <button className="p-1.5 rounded-btn text-text-muted hover:text-risk-critical hover:bg-risk-critical/10 transition-colors" onClick={(e) => { e.stopPropagation(); }}>
           <Trash2 size={16} />
         </button>
       </div>
@@ -61,21 +55,63 @@ const columns: TableColumn<RawData>[] = [
 ];
 
 export function RawDataList() {
+  const [data, setData] = useState<RawData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const { addToast } = useToastStore();
   const navigate = useNavigate();
 
-  const filtered = mockData.filter((d) => {
-    if (search && !d.source_type.toLowerCase().includes(search.toLowerCase())) return false;
-    if (statusFilter && d.status !== statusFilter) return false;
-    return true;
-  });
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await dataService.list({
+        search: search || undefined,
+        status: statusFilter || undefined,
+        page: 1,
+        page_size: 50,
+      });
+      setData(res.data.items);
+    } catch (error) {
+      console.error('Failed to fetch raw data:', error);
+      addToast({ type: 'error', title: '加载失败', message: '无法获取数据列表' });
+    } finally {
+      setLoading(false);
+    }
+  }, [search, statusFilter, addToast]);
 
-  const handleCreate = () => {
-    setShowCreateModal(false);
-    addToast({ type: 'success', title: '数据创建成功', message: '新的原始数据已提交' });
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleCreate = async (formData: { source_type: string; source_id: string; data_type: string; content: string }) => {
+    try {
+      let payload: Record<string, unknown> = {};
+      try { payload = JSON.parse(formData.content); } catch { payload = { content: formData.content }; }
+
+      await dataService.create({
+        source_type: formData.source_type,
+        source_id: formData.source_id,
+        payload,
+      });
+      setShowCreateModal(false);
+      addToast({ type: 'success', title: '数据创建成功', message: '新的原始数据已提交' });
+      fetchData();
+    } catch (error) {
+      addToast({ type: 'error', title: '创建失败', message: '数据提交失败，请重试' });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('确定要删除这条数据吗？')) return;
+    try {
+      await dataService.delete(id);
+      addToast({ type: 'success', title: '删除成功', message: '数据已删除' });
+      fetchData();
+    } catch (error) {
+      addToast({ type: 'error', title: '删除失败', message: '数据删除失败，请重试' });
+    }
   };
 
   return (
@@ -122,41 +158,70 @@ export function RawDataList() {
             className="w-32"
           />
         </div>
-        <Table
-          columns={columns}
-          data={filtered}
-          keyExtractor={(d) => d.id}
-          onRowClick={(row) => navigate(`/raw-data/${row.id}`)}
-        />
+        {loading ? (
+          <div className="p-8 space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        ) : (
+          <Table
+            columns={columns}
+            data={data}
+            keyExtractor={(d) => d.id}
+            onRowClick={(row) => navigate(`/raw-data/${row.id}`)}
+          />
+        )}
       </Card>
 
       <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title="录入原始数据" size="lg">
-        <div className="space-y-4">
-          <Input label="数据来源" placeholder="例如：ERP系统、供应商API" />
-          <Select
-            label="数据类型"
-            options={[
-              { value: 'inventory', label: '库存数据' },
-              { value: 'supplier', label: '供应商数据' },
-              { value: 'logistics', label: '物流数据' },
-              { value: 'manual', label: '手动录入' },
-            ]}
-            placeholder="选择数据类型"
-          />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-caption font-medium text-text-secondary">数据内容 (JSON)</label>
-            <textarea
-              rows={6}
-              placeholder='{"key": "value"}'
-              className="rounded-input px-3 py-2 text-body bg-bg-primary border border-border text-text-primary placeholder:text-text-muted resize-none font-mono text-caption focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue"
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setShowCreateModal(false)}>取消</Button>
-            <Button onClick={handleCreate}>提交</Button>
-          </div>
-        </div>
+        <CreateDataForm onSubmit={handleCreate} onCancel={() => setShowCreateModal(false)} />
       </Modal>
     </div>
+  );
+}
+
+function CreateDataForm({ onSubmit, onCancel }: { onSubmit: (data: { source_type: string; source_id: string; data_type: string; content: string }) => void; onCancel: () => void }) {
+  const [sourceType, setSourceType] = useState('');
+  const [sourceId, setSourceId] = useState('');
+  const [dataType, setDataType] = useState('');
+  const [content, setContent] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({ source_type: sourceType, source_id: sourceId, data_type: dataType, content });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <Input label="数据来源" placeholder="例如：ERP系统、供应商API" value={sourceType} onChange={(e) => setSourceType(e.target.value)} required />
+      <Input label="源ID" placeholder="例如：ERP-001" value={sourceId} onChange={(e) => setSourceId(e.target.value)} />
+      <Select
+        label="数据类型"
+        options={[
+          { value: 'inventory', label: '库存数据' },
+          { value: 'supplier', label: '供应商数据' },
+          { value: 'logistics', label: '物流数据' },
+          { value: 'manual', label: '手动录入' },
+        ]}
+        value={dataType}
+        onChange={(e) => setDataType(e.target.value)}
+        placeholder="选择数据类型"
+      />
+      <div className="flex flex-col gap-1.5">
+        <label className="text-caption font-medium text-text-secondary">数据内容 (JSON)</label>
+        <textarea
+          rows={6}
+          placeholder='{"key": "value"}'
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          className="rounded-input px-3 py-2 text-body bg-bg-primary border border-border text-text-primary placeholder:text-text-muted resize-none font-mono text-caption focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue"
+        />
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="secondary" onClick={onCancel}>取消</Button>
+        <Button type="submit">提交</Button>
+      </div>
+    </form>
   );
 }
