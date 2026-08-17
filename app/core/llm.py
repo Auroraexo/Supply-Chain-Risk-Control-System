@@ -6,10 +6,12 @@
 
 from enum import Enum
 from functools import lru_cache
+from itertools import repeat
 from typing import Optional
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
 from app.core.config import Settings, get_settings
@@ -46,7 +48,8 @@ def get_llm(
     if mock is None:
         mock = settings.LLM_MOCK_MODE
     if mock:
-        return GenericFakeChatModel(messages=iter([]))
+        # 使用无限迭代器产出确定性假回复，避免 StopIteration 崩溃
+        return GenericFakeChatModel(messages=iter(repeat(AIMessage(content="[mock] 这是模拟 LLM 回复"))))
 
     # 确定 provider
     provider = provider or LLMProvider(settings.LLM_PROVIDER)
@@ -76,10 +79,13 @@ def get_llm(
         )
 
     elif provider == LLMProvider.LOCAL:
+        # LOCAL 统一走 Ollama 的 OpenAI 兼容端点，与 model_selector 保持一致
+        ollama_base = settings.OLLAMA_BASE_URL.rstrip("/")
+        base_url = settings.LLM_BASE_URL or f"{ollama_base}/v1"
         return ChatOpenAI(
             model=settings.LLM_MODEL,
             api_key="not-needed",
-            base_url=settings.LLM_BASE_URL or "http://localhost:8000/v1",
+            base_url=base_url,
             **common_kwargs,
         )
 
@@ -118,18 +124,24 @@ async def get_smart_llm(query: str, **kwargs) -> BaseChatModel:
 
 
 def get_smart_llm_sync(query: str, **kwargs) -> BaseChatModel:
-    """get_smart_llm 的同步包装。"""
+    """get_smart_llm 的同步包装。
+
+    在已有运行中的事件循环场景下（如 FastAPI 请求上下文），通过独立线程
+    运行一个全新的事件循环来避免死锁；否则直接在当前线程 asyncio.run。
+    """
     import asyncio
-    import concurrent.futures
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(
-                    asyncio.run, get_smart_llm(query, **kwargs)
-                )
-                return future.result(timeout=30)
+        asyncio.get_running_loop()
     except RuntimeError:
-        pass
-    return asyncio.run(get_smart_llm(query, **kwargs))
+        # 当前线程无运行中的事件循环，直接同步运行
+        return asyncio.run(get_smart_llm(query, **kwargs))
+
+    # 当前线程已有事件循环在运行，需在新线程中运行，避免阻塞/死锁
+    import concurrent.futures
+
+    def _run_in_new_loop() -> BaseChatModel:
+        return asyncio.run(get_smart_llm(query, **kwargs))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        return executor.submit(_run_in_new_loop).result(timeout=30)

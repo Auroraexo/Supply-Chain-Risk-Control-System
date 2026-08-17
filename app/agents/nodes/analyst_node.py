@@ -4,10 +4,13 @@
 上游：scout
 下游：reflection（高风险）或 decider（低风险）或 human_review（失败）
 """
+import json
 import time
 from datetime import datetime
 from app.agents.state import AgentState, DecisionStatus, RiskLevel
 from app.agents.tools.risk_tools import calculate_risk_score, query_historical_patterns
+from app.agents.prompt_loader import get_prompt_loader
+from app.core.llm import get_llm
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -78,8 +81,16 @@ async def analyst_node(state: AgentState) -> AgentState:
             state["anomaly_tags"].append("price_anomaly")
         if supplier_rating < 3.0:
             state["anomaly_tags"].append("supplier_risk")
-        state["analysis_reasoning"] = f"评分={score}, 等级={level}"
         state["retry_count"] = 0
+
+        # ── 阶段 4：LLM 生成分析推理（失败时回退到规则文本） ──
+        state["analysis_reasoning"] = await _generate_reasoning(
+            request_id=request_id,
+            score=score,
+            level=level,
+            anomaly_tags=state["anomaly_tags"],
+            facts=facts,
+        )
 
         if level in (RiskLevel.HIGH.value, RiskLevel.CRITICAL.value):
             logger.warning(
@@ -134,3 +145,44 @@ async def analyst_node(state: AgentState) -> AgentState:
         elapsed_ms=total_elapsed,
     )
     return state
+
+
+async def _generate_reasoning(
+    request_id: str,
+    score: float,
+    level: str,
+    anomaly_tags: list[str],
+    facts: dict,
+) -> str:
+    """用 LLM 生成分析推理，失败时静默回退到规则文本。
+
+    LLM 作为增强层：不改变确定性评分结果，仅丰富 reasoning 文本。
+    在 mock 模式或 LLM 不可用时，回退到简洁的规则摘要，保证链路稳定。
+    """
+    fallback = f"评分={score}, 等级={level}, 异常标签={','.join(anomaly_tags) or '无'}"
+    try:
+        prompt = await get_prompt_loader().get_prompt("analyst")
+        system_prompt = prompt.get("system_prompt", "")
+        llm = get_llm(temperature=0.0)
+        user_msg = (
+            f"结构化事实: {json.dumps(facts, ensure_ascii=False, default=str)}\n"
+            f"风险评分: {score}\n"
+            f"风险等级: {level}\n"
+            f"异常标签: {anomaly_tags or '无'}\n"
+            "请用简洁中文输出风险分析推理（说明主要风险来源与依据）。"
+        )
+        messages = [
+            ("system", system_prompt),
+            ("human", user_msg),
+        ]
+        resp = await llm.ainvoke(messages)
+        content = getattr(resp, "content", "")
+        if content and str(content).strip():
+            return str(content).strip()
+    except Exception as e:
+        logger.warning(
+            "analyst.reasoning_llm_fallback",
+            request_id=request_id,
+            error=str(e),
+        )
+    return fallback

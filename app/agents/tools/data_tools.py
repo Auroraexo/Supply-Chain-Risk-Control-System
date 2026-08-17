@@ -1,5 +1,6 @@
 """数据查询工具。"""
 import asyncio
+import concurrent.futures
 import json
 import structlog
 from langchain_core.tools import tool
@@ -8,30 +9,20 @@ from typing import Optional
 logger = structlog.get_logger(__name__)
 
 
-def _query_raw_data_sync(raw_data_id: str) -> dict:
-    """同步查询原始数据（内部使用 asyncio 桥接异步 DB 操作）。
+def _run_sync(coro_factory):
+    """在事件循环中安全地运行异步协程。
 
-    由于 LangChain @tool 要求同步函数，这里通过 asyncio 桥接
-    异步数据库查询，确保在 Agent 节点中可以直接调用。
+    coro_factory 是返回协程的零参数可调用对象，
+    确保每次执行都新建协程（协程对象不可重复运行）。
     """
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # 在已有事件循环中（如 FastAPI 请求上下文），创建新任务
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(_run_async_query, raw_data_id)
-                return future.result(timeout=10)
-        else:
-            return loop.run_until_complete(_async_query_raw_data(raw_data_id))
+        asyncio.get_running_loop()
     except RuntimeError:
-        # 没有事件循环，创建一个
-        return asyncio.run(_async_query_raw_data(raw_data_id))
+        return asyncio.run(coro_factory())
 
-
-def _run_async_query(raw_data_id: str) -> dict:
-    """在线程池中运行异步查询（用于已有事件循环的场景）。"""
-    return asyncio.run(_async_query_raw_data(raw_data_id))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(asyncio.run, coro_factory())
+        return future.result(timeout=10)
 
 
 async def _async_query_raw_data(raw_data_id: str) -> dict:
@@ -109,7 +100,7 @@ def get_raw_data(raw_data_id: str) -> dict:
     Args:
         raw_data_id: 原始数据ID
     """
-    return _query_raw_data_sync(raw_data_id)
+    return _run_sync(lambda: _async_query_raw_data(raw_data_id))
 
 
 @tool

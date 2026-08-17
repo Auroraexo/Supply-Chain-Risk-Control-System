@@ -1,14 +1,11 @@
 """Agent 共享状态定义。
 
-使用 TypedDict 定义 LangGraph 全局状态，所有 Agent 节点通过此 State 通信。
+使用 dict 子类定义 LangGraph 全局状态，所有 Agent 节点通过此 State 通信。
 """
 
-from typing import Annotated, Optional
+from typing import Optional
 from datetime import datetime
 from enum import Enum
-
-from langgraph.graph.message import add_messages
-from langchain_core.messages import BaseMessage
 
 
 class RiskLevel(str, Enum):
@@ -27,7 +24,7 @@ class DecisionStatus(str, Enum):
 
 
 class AgentState(dict):
-    """Agent 全局状态（使用 dict 类型以兼容 LangGraph）。"""
+    """Agent 全局状态（dict 子类，兼容 StateGraph(dict)）。"""
 
     def __init__(self, **kwargs):
         defaults = {

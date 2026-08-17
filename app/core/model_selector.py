@@ -19,6 +19,7 @@
 """
 
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -107,28 +108,34 @@ class OllamaModelDetector:
         self.cache_ttl = cache_ttl
         self._cache: Optional[list[ModelInfo]] = None
         self._cache_time: float = 0.0
+        self._lock = threading.Lock()
 
     async def list_models(self, force_refresh: bool = False) -> list[ModelInfo]:
         if not force_refresh and self._cache and (time.time() - self._cache_time) < self.cache_ttl:
             return self._cache
 
-        try:
-            models = await self._fetch_models()
-            self._cache = models
-            self._cache_time = time.time()
-            logger.info(
-                "model_detector.models_detected",
-                count=len(models),
-                small=[m.name for m in models if m.category == ModelCategory.SMALL],
-                large=[m.name for m in models if m.category == ModelCategory.LARGE],
-            )
-            return models
-        except httpx.ConnectError:
-            logger.warning("model_detector.ollama_unreachable", base_url=self.base_url)
-            return []
-        except Exception as e:
-            logger.error("model_detector.fetch_failed", error=str(e), exc_info=True)
-            return []
+        # 加锁避免 TTL 过期时并发请求同时触发 fetch
+        with self._lock:
+            if not force_refresh and self._cache and (time.time() - self._cache_time) < self.cache_ttl:
+                return self._cache
+
+            try:
+                models = await self._fetch_models()
+                self._cache = models
+                self._cache_time = time.time()
+                logger.info(
+                    "model_detector.models_detected",
+                    count=len(models),
+                    small=[m.name for m in models if m.category == ModelCategory.SMALL],
+                    large=[m.name for m in models if m.category == ModelCategory.LARGE],
+                )
+                return models
+            except httpx.ConnectError:
+                logger.warning("model_detector.ollama_unreachable", base_url=self.base_url)
+                return []
+            except Exception as e:
+                logger.error("model_detector.fetch_failed", error=str(e), exc_info=True)
+                return []
 
     async def _fetch_models(self) -> list[ModelInfo]:
         settings = get_settings()
@@ -283,34 +290,37 @@ class ModelPerformanceTracker:
 
     def __init__(self):
         self._stats: dict[str, dict] = {}
+        self._lock = threading.Lock()
 
     def record_selection(self, model_name: str, complexity: str, elapsed_ms: float) -> None:
-        if model_name not in self._stats:
-            self._stats[model_name] = {
-                "count": 0,
-                "total_latency_ms": 0.0,
-                "simple_count": 0,
-                "complex_count": 0,
-            }
-        s = self._stats[model_name]
-        s["count"] += 1
-        s["total_latency_ms"] += elapsed_ms
-        if complexity == QueryComplexity.SIMPLE.value:
-            s["simple_count"] += 1
-        else:
-            s["complex_count"] += 1
+        with self._lock:
+            if model_name not in self._stats:
+                self._stats[model_name] = {
+                    "count": 0,
+                    "total_latency_ms": 0.0,
+                    "simple_count": 0,
+                    "complex_count": 0,
+                }
+            s = self._stats[model_name]
+            s["count"] += 1
+            s["total_latency_ms"] += elapsed_ms
+            if complexity == QueryComplexity.SIMPLE.value:
+                s["simple_count"] += 1
+            else:
+                s["complex_count"] += 1
 
     def get_stats(self) -> dict:
-        result = {}
-        for name, s in self._stats.items():
-            avg = s["total_latency_ms"] / s["count"] if s["count"] > 0 else 0
-            result[name] = {
-                "count": s["count"],
-                "avg_latency_ms": round(avg, 1),
-                "simple_count": s["simple_count"],
-                "complex_count": s["complex_count"],
-            }
-        return result
+        with self._lock:
+            result = {}
+            for name, s in self._stats.items():
+                avg = s["total_latency_ms"] / s["count"] if s["count"] > 0 else 0
+                result[name] = {
+                    "count": s["count"],
+                    "avg_latency_ms": round(avg, 1),
+                    "simple_count": s["simple_count"],
+                    "complex_count": s["complex_count"],
+                }
+            return result
 
 
 # ──────────────────────────────────────────────

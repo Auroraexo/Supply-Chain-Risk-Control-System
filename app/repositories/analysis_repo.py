@@ -24,3 +24,12 @@ class AnalysisRepository(BaseRepository[AnalysisResult]):
             ).order_by(AnalysisResult.risk_score.desc()).limit(limit)
         )
         return list(result.scalars().all())
+
+    async def get_recent(self, limit: int = 20) -> list[AnalysisResult]:
+        result = await self.db.execute(
+            select(AnalysisResult)
+            .where(AnalysisResult.risk_level.isnot(None))
+            .order_by(AnalysisResult.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
