@@ -130,3 +130,20 @@ export interface LLMConfig {
   mock_mode: boolean;
   smart_routing: boolean;
 }
+
+export interface AgentExecutionStep {
+  step: string;
+  action: string;
+  input: Record<string, unknown> | null;
+  output: string | null;
+  elapsed_ms: number;
+  status: 'success' | 'error' | 'running';
+}
+
+export interface DecisionTrace {
+  request_id: string;
+  steps: AgentExecutionStep[];
+  final_decision: string;
+  confidence: number;
+  timestamp: string;
+}

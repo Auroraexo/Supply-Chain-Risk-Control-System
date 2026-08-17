@@ -6,6 +6,9 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import {
   AlertTriangle, TrendingUp, Clock, GitBranch, Shield, ArrowRight, Activity, Scale,
 } from 'lucide-react';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 import { dashboardService } from '@/services/dashboardService';
 import type { DashboardSummary, RiskTrendPoint, AlertItem } from '@/types/models';
 
@@ -69,32 +72,58 @@ function AlertTimeline({ alerts }: { alerts: AlertItem[] }) {
 function TrendChart({ data }: { data: RiskTrendPoint[] }) {
   if (data.length === 0) return <div className="h-48 flex items-center justify-center text-text-muted">暂无趋势数据</div>;
 
-  const maxVal = Math.max(...data.flatMap((d) => [d.critical, d.high, d.medium, d.low]), 1);
-  const height = 180;
-  const barWidth = Math.max(8, Math.min(16, 600 / data.length - 4));
+  const chartData = data.map((point) => ({
+    date: point.date.slice(5),
+    critical: point.critical,
+    high: point.high,
+    medium: point.medium,
+    low: point.low,
+  }));
 
   return (
-    <div className="h-48 flex items-end gap-1">
-      {data.map((point, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1" title={point.date}>
-          <div className="w-full flex flex-col-reverse" style={{ height }}>
-            {point.critical > 0 && (
-              <div className="w-full bg-risk-critical rounded-t-sm transition-all duration-300" style={{ height: `${(point.critical / maxVal) * 100}%`, minHeight: point.critical > 0 ? 3 : 0 }} />
-            )}
-            {point.high > 0 && (
-              <div className="w-full bg-risk-high transition-all duration-300" style={{ height: `${(point.high / maxVal) * 100}%`, minHeight: point.high > 0 ? 3 : 0 }} />
-            )}
-            {point.medium > 0 && (
-              <div className="w-full bg-risk-medium transition-all duration-300" style={{ height: `${(point.medium / maxVal) * 100}%`, minHeight: point.medium > 0 ? 3 : 0 }} />
-            )}
-            {point.low > 0 && (
-              <div className="w-full bg-risk-low rounded-t-sm transition-all duration-300" style={{ height: `${(point.low / maxVal) * 100}%`, minHeight: point.low > 0 ? 3 : 0 }} />
-            )}
-          </div>
-          <span className="text-caption text-text-muted">{point.date.slice(5)}</span>
-        </div>
-      ))}
-    </div>
+    <ResponsiveContainer width="100%" height={220}>
+      <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+        <defs>
+          <linearGradient id="criticalGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="highGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="mediumGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="lowGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+            <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: '#1F2937',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '8px',
+            fontSize: '12px',
+            color: '#F9FAFB',
+          }}
+        />
+        <Legend
+          wrapperStyle={{ fontSize: '12px', color: '#9CA3AF' }}
+          iconType="circle"
+          iconSize={8}
+        />
+        <Area type="monotone" dataKey="critical" stroke="#EF4444" fill="url(#criticalGrad)" strokeWidth={2} name="严重" />
+        <Area type="monotone" dataKey="high" stroke="#F97316" fill="url(#highGrad)" strokeWidth={2} name="高风险" />
+        <Area type="monotone" dataKey="medium" stroke="#F59E0B" fill="url(#mediumGrad)" strokeWidth={2} name="中风险" />
+        <Area type="monotone" dataKey="low" stroke="#10B981" fill="url(#lowGrad)" strokeWidth={2} name="低风险" />
+      </AreaChart>
+    </ResponsiveContainer>
   );
 }
 

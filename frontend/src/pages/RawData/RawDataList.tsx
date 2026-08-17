@@ -8,6 +8,7 @@ import { Select } from '@/components/ui/Select';
 import { Table } from '@/components/ui/Table';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToastStore } from '@/stores/toastStore';
 import { dataService } from '@/services/dataService';
@@ -60,6 +61,8 @@ export function RawDataList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [drawerData, setDrawerData] = useState<RawData | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const { addToast } = useToastStore();
   const navigate = useNavigate();
 
@@ -169,7 +172,7 @@ export function RawDataList() {
             columns={columns}
             data={data}
             keyExtractor={(d) => d.id}
-            onRowClick={(row) => navigate(`/raw-data/${row.id}`)}
+            onRowClick={(row) => { setDrawerData(row); setDrawerOpen(true); }}
           />
         )}
       </Card>
@@ -177,6 +180,51 @@ export function RawDataList() {
       <Modal open={showCreateModal} onClose={() => setShowCreateModal(false)} title="录入原始数据" size="lg">
         <CreateDataForm onSubmit={handleCreate} onCancel={() => setShowCreateModal(false)} />
       </Modal>
+
+      <Drawer open={drawerOpen} onClose={() => { setDrawerOpen(false); setDrawerData(null); }} title="数据详情预览">
+        {drawerData && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-h3 text-text-primary mb-3">基本信息</h3>
+              <dl className="space-y-2.5">
+                {[
+                  { label: '数据来源', value: drawerData.source_type },
+                  { label: '源ID', value: drawerData.source_id || '-' },
+                  { label: '数据哈希', value: drawerData.data_hash?.slice(0, 16) + '...' || '-' },
+                  { label: '质量评分', value: drawerData.quality_score?.toFixed(2) || '-' },
+                  { label: '创建时间', value: new Date(drawerData.created_at).toLocaleString('zh-CN') },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex justify-between py-1 border-b border-border/20 last:border-b-0">
+                    <dt className="text-caption text-text-muted">{label}</dt>
+                    <dd className="text-caption text-text-primary font-medium text-right max-w-[200px] truncate">{value}</dd>
+                  </div>
+                ))}
+                <div className="flex justify-between py-1">
+                  <dt className="text-caption text-text-muted">状态</dt>
+                  <dd>
+                    {(() => {
+                      const cfg = statusConfig[drawerData.status];
+                      return <Badge variant={cfg?.variant || 'default'}>{cfg?.label || drawerData.status}</Badge>;
+                    })()}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+            <div>
+              <h3 className="text-h3 text-text-primary mb-3">数据内容</h3>
+              <pre className="bg-bg-primary rounded-input p-3 text-caption text-text-primary font-mono overflow-x-auto max-h-64 overflow-y-auto">
+                {JSON.stringify(drawerData.payload, null, 2)}
+              </pre>
+            </div>
+            <div className="pt-3 border-t border-border">
+              <Button variant="outline" className="w-full" onClick={() => { navigate(`/raw-data/${drawerData.id}`); setDrawerOpen(false); }}>
+                <Eye size={16} />
+                查看完整详情
+              </Button>
+            </div>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

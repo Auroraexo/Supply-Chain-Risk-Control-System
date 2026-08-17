@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Tabs } from '@/components/ui/Tabs';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useToastStore } from '@/stores/toastStore';
-import { Save, Cpu, RefreshCw, Bell } from 'lucide-react';
+import { Save, Cpu, RefreshCw, Bell, Loader2 } from 'lucide-react';
+import { settingsService } from '@/services/settingsService';
+import type { NotificationChannel } from '@/services/settingsService';
 import { UserManagement } from './UserManagement';
 
 const settingsTabs = [
@@ -19,24 +22,79 @@ export function LLMConfig() {
   const [config, setConfig] = useState({
     provider: 'openai',
     model: 'gpt-4o-mini',
-    api_key: '••••••••••••••••',
+    api_key: '',
     temperature: 0.7,
     max_tokens: 4096,
     mock_mode: true,
     smart_routing: false,
   });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const { addToast } = useToastStore();
 
-  const handleSave = () => {
-    addToast({ type: 'success', title: '配置已保存', message: 'LLM配置更新成功' });
+  useEffect(() => {
+    async function fetchConfig() {
+      try {
+        const res = await settingsService.getLLMConfig();
+        if (res.data) {
+          setConfig(res.data);
+        }
+      } catch {
+        addToast({ type: 'error', title: '加载失败', message: '无法获取LLM配置' });
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchConfig();
+  }, [addToast]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await settingsService.updateLLMConfig(config);
+      addToast({ type: 'success', title: '配置已保存', message: 'LLM配置更新成功' });
+    } catch {
+      addToast({ type: 'error', title: '保存失败', message: 'LLM配置保存失败' });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleTest = () => {
-    addToast({ type: 'info', title: '正在测试连接...', message: '请稍候' });
-    setTimeout(() => {
-      addToast({ type: 'success', title: '连接测试成功', message: '模型响应正常' });
-    }, 1500);
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      const res = await settingsService.testLLMConnection({
+        provider: config.provider,
+        model: config.model,
+        api_key: config.api_key,
+      });
+      if (res.data?.success) {
+        addToast({ type: 'success', title: '连接测试成功', message: `${res.data.message} (${res.data.latency_ms}ms)` });
+      } else {
+        addToast({ type: 'error', title: '连接测试失败', message: res.data?.message || '未知错误' });
+      }
+    } catch {
+      addToast({ type: 'error', title: '测试失败', message: '无法连接到LLM服务' });
+    } finally {
+      setTesting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <Card>
+        <div className="space-y-4">
+          <Skeleton className="h-6 w-32" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -46,12 +104,12 @@ export function LLMConfig() {
           <h3 className="text-h3 text-text-primary">LLM 模型配置</h3>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleTest}>
-            <RefreshCw size={14} />
+          <Button variant="outline" size="sm" onClick={handleTest} disabled={testing}>
+            {testing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
             测试连接
           </Button>
-          <Button size="sm" onClick={handleSave}>
-            <Save size={14} />
+          <Button size="sm" onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             保存
           </Button>
         </div>
@@ -126,12 +184,26 @@ export function LLMConfig() {
 }
 
 export function NotificationSettings() {
-  const [channels, setChannels] = useState([
-    { id: '1', type: 'email', name: '邮件通知', enabled: true, config: 'admin@example.com' },
-    { id: '2', type: 'webhook', name: 'Webhook', enabled: false, config: 'https://hooks.example.com/notify' },
-    { id: '3', type: 'slack', name: 'Slack', enabled: false, config: '' },
-  ]);
+  const [channels, setChannels] = useState<NotificationChannel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const { addToast } = useToastStore();
+
+  useEffect(() => {
+    async function fetchChannels() {
+      try {
+        const res = await settingsService.getNotificationSettings();
+        if (res.data?.channels) {
+          setChannels(res.data.channels);
+        }
+      } catch {
+        addToast({ type: 'error', title: '加载失败', message: '无法获取通知设置' });
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchChannels();
+  }, [addToast]);
 
   const handleToggle = (id: string) => {
     setChannels((prev) =>
@@ -139,9 +211,30 @@ export function NotificationSettings() {
     );
   };
 
-  const handleSave = () => {
-    addToast({ type: 'success', title: '通知设置已保存', message: '通知渠道配置已更新' });
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await settingsService.updateNotificationSettings({ channels });
+      addToast({ type: 'success', title: '通知设置已保存', message: '通知渠道配置已更新' });
+    } catch {
+      addToast({ type: 'error', title: '保存失败', message: '通知设置保存失败' });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <Card>
+        <div className="space-y-4">
+          <Skeleton className="h-6 w-32" />
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -150,8 +243,8 @@ export function NotificationSettings() {
           <Bell size={20} className="text-accent-blue" />
           <h3 className="text-h3 text-text-primary">通知渠道</h3>
         </div>
-        <Button size="sm" onClick={handleSave}>
-          <Save size={14} />
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           保存
         </Button>
       </div>
