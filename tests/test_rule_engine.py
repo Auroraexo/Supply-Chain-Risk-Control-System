@@ -17,6 +17,7 @@ from app.rule_engine.rule_executor import (
     RuleExecutor,
     RulePrioritizer,
 )
+from app.rule_engine.rule_loader import RuleLoader
 from app.rule_engine.tree_walker import DecisionTreeWalker
 
 # ──────────────────────────────────────────────
@@ -339,3 +340,104 @@ def test_tree_walker_walk_priority_sorted_children():
     # priority 高者先命中
     assert context["decision_action"] == "reject"
     assert path == ["root", "child_high"]
+
+
+# ──────────────────────────────────────────────
+# A2: RuleLoader —— RuleNode 树 → Rule 条件树转换
+# ──────────────────────────────────────────────
+
+class _EnumVal:
+    def __init__(self, value):
+        self.value = value
+
+
+class _RuleNode:
+    """模拟 RuleNode ORM 对象。"""
+
+    def __init__(self, id, rule_name, rule_type, children=None, **kwargs):
+        self.id = id
+        self.rule_name = rule_name
+        self.rule_type = _EnumVal(rule_type)
+        self.children = children or []
+        self.field_name = kwargs.get("field_name")
+        self.operator = kwargs.get("operator")
+        self.threshold_value = kwargs.get("threshold_value")
+        self.logic_op = kwargs.get("logic_op")
+        self.action = kwargs.get("action")
+        self.action_params = kwargs.get("action_params")
+        self.priority = kwargs.get("priority", 0)
+        self.is_active = kwargs.get("is_active", True)
+
+
+class _FakeLoaderRepo:
+    """模拟 RuleRepository，仅提供 get_root_nodes。"""
+
+    def __init__(self, roots):
+        self._roots = roots
+
+    async def get_root_nodes(self):
+        return self._roots
+
+
+def test_rule_loader_converts_condition_and_action():
+    """condition 根节点 + action 子节点 → 一条含条件与 action 的 Rule。"""
+    action_node = _RuleNode("act", "动作", "action", action="reject")
+    cond_node = _RuleNode(
+        "root",
+        "高风险拒绝",
+        "condition",
+        children=[action_node],
+        field_name="risk_score",
+        operator="gt",
+        threshold_value="70",
+        priority=10,
+    )
+    repo = _FakeLoaderRepo([cond_node])
+    loader = RuleLoader(rule_repo=repo)
+    prioritizer = asyncio.run(loader.load_rules())
+
+    result = prioritizer.execute({"risk_score": 80})
+    assert result is not None
+    assert result["action"] == "reject"
+
+    # 条件不满足 → 不命中
+    assert prioritizer.execute({"risk_score": 20}) is None
+
+
+def test_rule_loader_converts_group_with_and():
+    """group 根节点 + 两个条件子节点 → AND 组合。"""
+    c1 = _RuleNode("c1", "评分", "condition", field_name="risk_score", operator="gt", threshold_value="50")
+    c2 = _RuleNode("c2", "评级", "condition", field_name="supplier_rating", operator="lt", threshold_value="3")
+    group = _RuleNode("root", "组合", "group", children=[c1, c2], logic_op=_EnumVal("AND"))
+    action = _RuleNode("act", "动作", "action", action="escalate")
+    group.children.append(action)
+
+    loader = RuleLoader(rule_repo=_FakeLoaderRepo([group]))
+    prioritizer = asyncio.run(loader.load_rules())
+
+    assert prioritizer.execute({"risk_score": 80, "supplier_rating": 2.0}) is not None
+    assert prioritizer.execute({"risk_score": 80, "supplier_rating": 4.0}) is None
+
+
+def test_rule_loader_skips_empty_rule():
+    """无字段、无 action 的根节点应被跳过。"""
+    empty = _RuleNode("empty", "空规则", "group", children=[])
+    loader = RuleLoader(rule_repo=_FakeLoaderRepo([empty]))
+    prioritizer = asyncio.run(loader.load_rules())
+    assert prioritizer.execute({"x": 1}) is None
+
+
+def test_rule_loader_no_repo_returns_empty():
+    """无 repo 时返回空规则集。"""
+    loader = RuleLoader(rule_repo=None)
+    prioritizer = asyncio.run(loader.load_rules())
+    assert prioritizer.execute({"x": 1}) is None
+
+
+def test_rule_loader_coerce_threshold_types():
+    """阈值字符串应被转换为数值类型。"""
+    assert RuleLoader._coerce_threshold("70") == 70
+    assert RuleLoader._coerce_threshold("3.5") == 3.5
+    assert RuleLoader._coerce_threshold("high") == "high"
+    assert RuleLoader._coerce_threshold(None) is None
+

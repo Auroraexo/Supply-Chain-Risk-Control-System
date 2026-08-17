@@ -9,8 +9,10 @@ from datetime import datetime
 
 import structlog
 
+from app.agents.prompt_loader import get_prompt_loader
 from app.agents.state import AgentState, DecisionStatus
 from app.agents.tools.data_tools import check_data_quality, get_raw_data
+from app.core.llm import get_llm
 
 logger = structlog.get_logger(__name__)
 
@@ -75,6 +77,14 @@ async def scout_node(state: AgentState) -> AgentState:
         state["data_issues"] = missing_fields
         state["retry_count"] = 0
 
+        # ── 阶段 4：LLM 生成数据质量说明（增强，失败时静默回退） ──
+        state["data_quality_notes"] = await _generate_quality_notes(
+            request_id=request_id,
+            quality_score=quality_score,
+            missing_fields=missing_fields,
+            facts=structured_facts,
+        )
+
         if quality_score < 0.5:
             logger.warning(
                 "scout.low_quality",
@@ -123,3 +133,44 @@ async def scout_node(state: AgentState) -> AgentState:
         elapsed_ms=total_elapsed,
     )
     return state
+
+
+async def _generate_quality_notes(
+    request_id: str,
+    quality_score: float,
+    missing_fields: list[str],
+    facts: dict,
+) -> str:
+    """用 LLM 生成数据质量语义说明，失败时静默回退到规则文本。
+
+    LLM 仅增强数据问题的可读描述，不改变确定性质检评分结果。
+    """
+    fallback = (
+        f"质量评分 {quality_score:.2f}"
+        + (f"，缺失字段: {','.join(missing_fields)}" if missing_fields else "")
+    )
+    try:
+        prompt = await get_prompt_loader().get_prompt("scout")
+        system_prompt = prompt.get("system_prompt", "")
+        llm = get_llm(temperature=0.0)
+        user_msg = (
+            f"结构化事实字段: {list(facts.keys()) or '无'}\n"
+            f"数据质量评分: {quality_score:.2f}\n"
+            f"缺失字段: {missing_fields or '无'}\n"
+            "请用简洁中文说明这批数据的质量问题与采集建议。"
+        )
+        messages = [
+            ("system", system_prompt),
+            ("human", user_msg),
+        ]
+        resp = await llm.ainvoke(messages)
+        content = getattr(resp, "content", "")
+        if content and str(content).strip():
+            return str(content).strip()
+    except Exception as e:
+        logger.warning(
+            "scout.quality_notes_llm_fallback",
+            request_id=request_id,
+            error=str(e),
+        )
+    return fallback

@@ -191,60 +191,48 @@ async def _decision_from_rule_engine(
     risk_level: str,
     facts: dict,
 ) -> tuple[str, float, list[str], str] | None:
-    """从规则引擎（rule_nodes 决策树）解析决策。
+    """从规则引擎解析决策。
 
-    通过 DecisionTreeWalker 遍历活跃规则树，命中 action 节点则采用；
-    未命中或 DB 无规则时返回 None，由调用方回退到矩阵。
+    优先走 RuleLoader → RulePrioritizer 链路（条件树求值），
+    若规则引擎未命中或无活跃规则，返回 None 由调用方回退到矩阵。
     """
     from app.core.database import get_session_factory
     from app.repositories.rule_repo import RuleRepository
-    from app.rule_engine.tree_walker import DecisionTreeWalker
+    from app.rule_engine.rule_loader import RuleLoader
 
-    context = {
+    eval_context = {
         "risk_score": risk_score,
         "risk_level": risk_level,
-        "decision_action": None,
         **{k: v for k, v in facts.items() if k in ("delay_days", "price_deviation", "supplier_rating", "historical_incidents")},
     }
 
     factory = get_session_factory()
     async with factory() as session:
         repo = RuleRepository(session)
-        roots = await repo.get_root_nodes()
+        loader = RuleLoader(rule_repo=repo)
+        prioritizer = await loader.load_rules()
 
-        if not roots:
-            logger.info("decider.rule_engine.no_active_rules", request_id=request_id)
-            return None
+        result = prioritizer.execute(eval_context)
 
-        walker = DecisionTreeWalker(rule_repo=repo)
-        matched_action = None
-        matched_path: list[str] = []
-
-        # 按优先级由高到低遍历根节点
-        for root in roots:
-            # 每次遍历前重置，避免读到上一个根节点的残留 action
-            context["decision_action"] = None
-            path = await walker.walk(root.id, context)
-            action = context.get("decision_action")
-            if action is not None:
-                matched_action = action
-                matched_path = path
-                break
-
-    if matched_action is None:
+    if result is None or not result.get("action"):
         logger.info("decider.rule_engine.no_match", request_id=request_id)
         return None
 
-    # 规则引擎命中的 action 归一化；置信度按风险等级映射
+    matched_action = result["action"]
     confidence = _confidence_for_action(matched_action, risk_level)
     logger.info(
         "decider.rule_engine.matched",
         request_id=request_id,
         action=matched_action,
-        path=matched_path,
+        source="rule_engine",
         confidence=confidence,
     )
-    return matched_action, confidence, matched_path, "rule_engine"
+    return matched_action, confidence, _build_rule_path(matched_action), "rule_engine"
+
+
+def _build_rule_path(action: str) -> list[str]:
+    """构建规则引擎命中的决策路径（语义化，非 DB 节点 ID）。"""
+    return ["root", "rule_engine", action]
 
 
 def _confidence_for_action(action: str, risk_level: str) -> float:

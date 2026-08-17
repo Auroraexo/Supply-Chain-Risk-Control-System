@@ -30,10 +30,11 @@ dependencies = [
     "aio-pika>=9.4.0",
     "arq>=0.26.0",
     # AI / Agent
-    "langchain>=0.3.0",
-    "langchain-openai>=0.2.0",
-    "langchain-anthropic>=0.2.0",
-    "langgraph>=0.2.0",
+    # 锁定 1.x 主版本：代码已适配 langchain 1.x 的 API（SecretStr、StateGraph 泛型等）
+    "langchain>=1.0,<2.0",
+    "langchain-openai>=1.0,<2.0",
+    "langchain-anthropic>=1.0,<2.0",
+    "langgraph>=1.0,<2.0",
     # 可观测性
     "structlog>=24.4.0",
     "opentelemetry-api>=1.26.0",
