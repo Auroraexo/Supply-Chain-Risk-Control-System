@@ -2,10 +2,12 @@
 
 支持条件评估、模板变量替换、优先级排序。
 """
-import time
 import operator
-from dataclasses import dataclass, field
-from typing import Any, Optional
+import time
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -17,7 +19,7 @@ class RuleCondition:
     op: str
     value: Any
     logic: str = "AND"
-    items: list["RuleCondition"] = field(default_factory=list)
+    items: list["RuleCondition"] = dataclass_field(default_factory=list)
 
 
 @dataclass
@@ -26,8 +28,8 @@ class Rule:
     rule_name: str
     priority: int = 0
     enabled: bool = True
-    conditions: Optional[RuleCondition] = None
-    action: Optional[dict] = None
+    conditions: RuleCondition | None = None
+    action: dict | None = None
 
 
 class RuleExecutor:
@@ -48,7 +50,7 @@ class RuleExecutor:
         "contains_any": lambda a, b: any(x in a for x in b) if isinstance(a, list) else False,
     }
 
-    def evaluate(self, rule: Rule, context: dict) -> Optional[dict]:
+    def evaluate(self, rule: Rule, context: dict) -> dict | None:
         """评估单条规则，返回 action 或 None。"""
         t0 = time.monotonic()
 
@@ -100,8 +102,6 @@ class RuleExecutor:
 
     def _evaluate_condition(self, condition: RuleCondition, context: dict, rule_id: str = "", depth: int = 0) -> bool:
         """递归评估条件树。"""
-        prefix = "  " * depth
-
         if condition.items:
             t0 = time.monotonic()
             results = [self._evaluate_condition(item, context, rule_id, depth + 1) for item in condition.items]
@@ -203,7 +203,7 @@ class RulePrioritizer:
             elapsed_ms=round((time.monotonic() - t0) * 1000, 1),
         )
 
-    def execute(self, context: dict) -> Optional[dict]:
+    def execute(self, context: dict) -> dict | None:
         """按优先级执行规则，返回第一个匹配的动作。"""
         flow_start = time.monotonic()
         executor = RuleExecutor()

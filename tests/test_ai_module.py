@@ -14,9 +14,11 @@ import asyncio
 from itertools import repeat
 
 import pytest
-from langchain_core.messages import AIMessage
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
 
+from app.agents.nodes.analyst_node import _apply_historical_adjustment, _score_to_level
+from app.agents.nodes.decider_node import _confidence_for_action, _resolve_decision
 from app.agents.state import (
     AgentState,
     DecisionStatus,
@@ -24,7 +26,6 @@ from app.agents.state import (
     create_initial_state,
 )
 from app.agents.tools.risk_tools import calculate_risk_score
-from app.agents.nodes.decider_node import _confidence_for_action, _resolve_decision
 from app.core.model_selector import (
     ModelCategory,
     QueryComplexity,
@@ -206,3 +207,52 @@ def test_query_historical_patterns_degrades_without_db():
     assert result["entity_id"] == "supplier_1"
     assert result["similarity_score"] == 0.0
     assert isinstance(result["patterns"], list)
+
+
+# ──────────────────────────────────────────────
+# A1: 历史模式评分调整
+# ──────────────────────────────────────────────
+def test_historical_adjustment_no_history():
+    """无历史模式时评分不变。"""
+    score, level = _apply_historical_adjustment(
+        raw_score=40.0, similarity_score=0.0, historical_pattern_count=0
+    )
+    assert score == 40.0
+    assert level == "medium"
+
+
+def test_historical_adjustment_upscores_risk():
+    """有历史高风险记录时评分上调，且可能提升等级。"""
+    score, level = _apply_historical_adjustment(
+        raw_score=45.0, similarity_score=0.5, historical_pattern_count=3
+    )
+    # 45 + 0.5*20 = 55 → 从 medium 提升到 high
+    assert score == 55.0
+    assert level == "high"
+
+
+def test_historical_adjustment_capped_at_100():
+    score, level = _apply_historical_adjustment(
+        raw_score=95.0, similarity_score=1.0, historical_pattern_count=5
+    )
+    assert score == 100.0
+    assert level == "critical"
+
+
+def test_historical_adjustment_similarity_clamped():
+    """相似度越界时被钳制在 [0,1]。"""
+    score, _ = _apply_historical_adjustment(
+        raw_score=50.0, similarity_score=2.0, historical_pattern_count=1
+    )
+    # 2.0 被钳制为 1.0 → 50 + 20 = 70
+    assert score == 70.0
+
+
+def test_score_to_level_boundaries():
+    assert _score_to_level(30) == "low"
+    assert _score_to_level(31) == "medium"
+    assert _score_to_level(50) == "medium"
+    assert _score_to_level(51) == "high"
+    assert _score_to_level(70) == "high"
+    assert _score_to_level(71) == "critical"
+

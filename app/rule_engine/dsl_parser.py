@@ -3,10 +3,11 @@
 将 YAML/JSON 格式的规则定义解析为 Rule 对象。
 """
 import time
-import yaml
-from typing import Optional
-from app.rule_engine.rule_executor import Rule, RuleCondition
+
 import structlog
+import yaml
+
+from app.rule_engine.rule_executor import Rule, RuleCondition
 
 logger = structlog.get_logger(__name__)
 

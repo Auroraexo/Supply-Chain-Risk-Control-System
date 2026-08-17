@@ -65,6 +65,8 @@ async def _match_rules_async(context: dict) -> dict:
             ctx = {**context, "decision_action": None}
             matched = []
             for root in roots:
+                # 每次遍历前重置，避免读到上一个根节点的残留 action
+                ctx["decision_action"] = None
                 path = await walker.walk(root.id, ctx)
                 action = ctx.get("decision_action")
                 if action is not None:

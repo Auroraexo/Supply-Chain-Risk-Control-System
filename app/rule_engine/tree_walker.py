@@ -3,7 +3,7 @@
 递归遍历 rule_nodes 表构建的决策树，返回决策路径。
 """
 import time
-from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -97,6 +97,17 @@ class DecisionTreeWalker:
                     result=condition_result,
                     depth=depth,
                 )
+                # 条件为假：该分支不命中，停止遍历（无 action 产出）
+                if not condition_result:
+                    logger.info(
+                        "tree_walker.branch_not_taken",
+                        node_id=node_id,
+                        field=current_node.get("field_name"),
+                        expected=current_node.get("threshold_value"),
+                        actual=context.get(current_node.get("field_name", "")),
+                        depth=depth,
+                    )
+                    break
 
             children = await self._get_children(node_id)
             if not children:
@@ -108,7 +119,9 @@ class DecisionTreeWalker:
                 )
                 break
 
-            current_node = children[0]
+            # 按 priority 降序取最优子节点（而非盲目取第一个）
+            children_sorted = sorted(children, key=lambda c: c.get("priority", 0), reverse=True)
+            current_node = children_sorted[0]
 
         if depth >= max_depth:
             logger.error(
@@ -178,7 +191,7 @@ class DecisionTreeWalker:
             )
             return False
 
-    async def _get_node(self, node_id: str) -> Optional[dict]:
+    async def _get_node(self, node_id: str) -> dict | None:
         """获取节点数据。"""
         t0 = time.monotonic()
         if self._rule_repo:

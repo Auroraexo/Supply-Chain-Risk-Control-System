@@ -1,7 +1,8 @@
 """规则加载器。从数据库加载规则并构建内存缓存。"""
-from typing import Optional
-from app.rule_engine.rule_executor import Rule, RuleCondition, RulePrioritizer
+
 import structlog
+
+from app.rule_engine.rule_executor import Rule, RulePrioritizer
 
 logger = structlog.get_logger(__name__)
 
@@ -15,7 +16,7 @@ class RuleLoader:
 
     def __init__(self, rule_repo=None):
         self._rule_repo = rule_repo
-        self._cache: Optional[RulePrioritizer] = None
+        self._cache: RulePrioritizer | None = None
 
     async def load_rules(self) -> RulePrioritizer:
         """加载所有活跃规则。"""

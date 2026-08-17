@@ -222,6 +222,8 @@ async def _decision_from_rule_engine(
 
         # 按优先级由高到低遍历根节点
         for root in roots:
+            # 每次遍历前重置，避免读到上一个根节点的残留 action
+            context["decision_action"] = None
             path = await walker.walk(root.id, context)
             action = context.get("decision_action")
             if action is not None:
