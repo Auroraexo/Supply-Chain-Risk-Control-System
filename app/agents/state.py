@@ -3,19 +3,18 @@
 使用 dict 子类定义 LangGraph 全局状态，所有 Agent 节点通过此 State 通信。
 """
 
-from typing import Optional
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
 
-class DecisionStatus(str, Enum):
+class DecisionStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -63,8 +62,8 @@ class AgentState(dict):
     def __getattr__(self, key):
         try:
             return self[key]
-        except KeyError:
-            raise AttributeError(f"AgentState has no attribute '{key}'")
+        except KeyError as err:
+            raise AttributeError(f"AgentState has no attribute '{key}'") from err
 
     def __setattr__(self, key, value):
         self[key] = value

@@ -7,10 +7,12 @@
 import json
 import time
 from datetime import datetime
-from app.agents.state import AgentState, RiskLevel
-from app.agents.prompt_loader import get_prompt_loader
-from app.core.llm import get_llm
+
 import structlog
+
+from app.agents.prompt_loader import get_prompt_loader
+from app.agents.state import AgentState
+from app.core.llm import get_llm
 
 logger = structlog.get_logger(__name__)
 

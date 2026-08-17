@@ -1,7 +1,6 @@
 """规则匹配工具。"""
 import asyncio
 import concurrent.futures
-from typing import Optional
 
 import structlog
 from langchain_core.tools import tool
@@ -82,7 +81,7 @@ async def _match_rules_async(context: dict) -> dict:
         return {"matched_rules": [], "rule_count": 0, "context": context, "error": str(e)}
 
 
-async def _get_decision_tree_async(root_node_id: Optional[str]) -> dict:
+async def _get_decision_tree_async(root_node_id: str | None) -> dict:
     """异步获取决策树结构。"""
     try:
         from app.core.database import get_session_factory

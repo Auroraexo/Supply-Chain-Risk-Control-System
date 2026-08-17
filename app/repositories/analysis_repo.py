@@ -1,7 +1,9 @@
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models.analysis_result import AnalysisResult, RiskLevel
 from app.repositories.base import BaseRepository
+
 
 class AnalysisRepository(BaseRepository[AnalysisResult]):
     def __init__(self, db: AsyncSession):

@@ -4,20 +4,21 @@
 测试环境可注入 Mock LLM，避免真实 API 调用。
 """
 
-from enum import Enum
+from enum import StrEnum
 from functools import lru_cache
 from itertools import repeat
-from typing import Optional
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
-from app.core.config import Settings, get_settings
+from app.core.config import get_settings
 
 
-class LLMProvider(str, Enum):
+class LLMProvider(StrEnum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     AZURE_OPENAI = "azure_openai"
@@ -26,10 +27,10 @@ class LLMProvider(str, Enum):
 
 @lru_cache
 def get_llm(
-    provider: Optional[LLMProvider] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    mock: Optional[bool] = None,
+    provider: LLMProvider | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    mock: bool | None = None,
 ) -> BaseChatModel:
     """获取 LLM 实例（工厂方法）。
 
@@ -56,24 +57,26 @@ def get_llm(
     temp = temperature if temperature is not None else settings.LLM_TEMPERATURE
     tokens = max_tokens if max_tokens is not None else settings.LLM_MAX_TOKENS
 
-    common_kwargs = {
+    common_kwargs: dict[str, Any] = {
         "temperature": temp,
         "max_tokens": tokens,
         "timeout": settings.LLM_TIMEOUT,
         "max_retries": 2,
     }
 
+    api_key = SecretStr(settings.LLM_API_KEY)
+
     if provider == LLMProvider.OPENAI:
         return ChatOpenAI(
             model=settings.LLM_MODEL,
-            api_key=settings.LLM_API_KEY,
+            api_key=api_key,
             **common_kwargs,
         )
 
     elif provider == LLMProvider.AZURE_OPENAI:
         return ChatOpenAI(
             model=settings.LLM_MODEL,
-            api_key=settings.LLM_API_KEY,
+            api_key=api_key,
             base_url=settings.LLM_BASE_URL,
             **common_kwargs,
         )
@@ -84,7 +87,7 @@ def get_llm(
         base_url = settings.LLM_BASE_URL or f"{ollama_base}/v1"
         return ChatOpenAI(
             model=settings.LLM_MODEL,
-            api_key="not-needed",
+            api_key=SecretStr("not-needed"),
             base_url=base_url,
             **common_kwargs,
         )
@@ -94,14 +97,14 @@ def get_llm(
             from langchain_anthropic import ChatAnthropic
 
             return ChatAnthropic(
-                model=settings.LLM_MODEL,
-                api_key=settings.LLM_API_KEY,
+                model=settings.LLM_MODEL,  # type: ignore[call-arg]  # langchain 1.x 存根滞后，运行时接受 model
+                api_key=api_key,
                 **common_kwargs,
             )
-        except ImportError:
+        except ImportError as err:
             raise ImportError(
                 "langchain-anthropic 未安装。请运行: pip install langchain-anthropic"
-            )
+            ) from err
 
     raise ValueError(f"不支持的 LLM Provider: {provider}")
 

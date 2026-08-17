@@ -1,8 +1,8 @@
 """Prompt 加载器。支持文件/DB 双源，热更新。"""
+from pathlib import Path
+
 import structlog
 import yaml
-from pathlib import Path
-from typing import Optional
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
@@ -73,7 +73,7 @@ class PromptLoader:
 
 
 # 全局单例
-_prompt_loader: Optional[PromptLoader] = None
+_prompt_loader: PromptLoader | None = None
 
 
 def get_prompt_loader() -> PromptLoader:

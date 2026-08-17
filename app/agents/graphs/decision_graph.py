@@ -4,15 +4,18 @@
 scout → analyst → (reflection) → decider → (human_review) → END
 """
 import time
-from langgraph.graph import StateGraph, END
+from typing import Any
+
+import structlog
 from langgraph.checkpoint.memory import MemorySaver
-from app.agents.state import AgentState, DecisionStatus, RiskLevel
-from app.agents.nodes.scout_node import scout_node
+from langgraph.graph import END, StateGraph
+
 from app.agents.nodes.analyst_node import analyst_node
 from app.agents.nodes.decider_node import decider_node
-from app.agents.nodes.reflection_node import reflection_node
 from app.agents.nodes.human_review_node import human_review_node
-import structlog
+from app.agents.nodes.reflection_node import reflection_node
+from app.agents.nodes.scout_node import scout_node
+from app.agents.state import AgentState, DecisionStatus, RiskLevel
 
 logger = structlog.get_logger(__name__)
 
@@ -96,7 +99,9 @@ def should_continue_after_human_review(state: AgentState) -> str:
 def build_decision_graph() -> StateGraph:
     """构建决策图。"""
     t0 = time.monotonic()
-    workflow = StateGraph(dict)
+    # langgraph 1.x 的类型存根（StateLike 不含 dict）与运行时不一致，
+    # 但 dict schema 在运行时完全可用（已验证），故此处精准抑制类型告警。
+    workflow = StateGraph(dict[str, Any])  # type: ignore[type-var]
 
     # 添加节点
     workflow.add_node("scout", scout_node)
@@ -175,7 +180,7 @@ async def run_decision_flow(request_id: str, raw_data_id: str, raw_data_payload:
         thread_id=request_id,
     )
 
-    final_state = await decision_app.ainvoke(initial_state, config)
+    final_state = await decision_app.ainvoke(initial_state, config)  # type: ignore[call-overload]  # 同上：langgraph 1.x 存根与运行时不一致
 
     total_elapsed = round((time.monotonic() - flow_start) * 1000, 1)
     logger.info(

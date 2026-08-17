@@ -23,8 +23,8 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Optional, TYPE_CHECKING
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 import httpx
 import structlog
@@ -41,12 +41,12 @@ logger = structlog.get_logger(__name__)
 # 枚举与数据模型
 # ──────────────────────────────────────────────
 
-class ModelCategory(str, Enum):
+class ModelCategory(StrEnum):
     SMALL = "small"
     LARGE = "large"
 
 
-class QueryComplexity(str, Enum):
+class QueryComplexity(StrEnum):
     SIMPLE = "simple"
     COMPLEX = "complex"
 
@@ -57,19 +57,20 @@ class ModelInfo:
     size_bytes: int
     parameter_count: float
     category: ModelCategory
-    quantization: Optional[str] = None
-    family: Optional[str] = None
+    quantization: str | None = None
+    family: str | None = None
 
     def to_chat_model(self, **kwargs) -> "BaseChatModel":
         from langchain_openai import ChatOpenAI
+        from pydantic import SecretStr
 
         settings = get_settings()
         return ChatOpenAI(
             model=self.name,
-            api_key="not-needed",
+            api_key=SecretStr("not-needed"),
             base_url=f"{settings.OLLAMA_BASE_URL}/v1",
             temperature=kwargs.get("temperature", settings.LLM_TEMPERATURE),
-            max_tokens=kwargs.get("max_tokens", settings.LLM_MAX_TOKENS),
+            max_tokens=kwargs.get("max_tokens", settings.LLM_MAX_TOKENS),  # type: ignore[call-arg]  # langchain 1.x 存根滞后
             timeout=kwargs.get("timeout", settings.LLM_TIMEOUT),
             max_retries=2,
         )
@@ -106,7 +107,7 @@ class OllamaModelDetector:
     def __init__(self, base_url: str, cache_ttl: int = 300):
         self.base_url = base_url.rstrip("/")
         self.cache_ttl = cache_ttl
-        self._cache: Optional[list[ModelInfo]] = None
+        self._cache: list[ModelInfo] | None = None
         self._cache_time: float = 0.0
         self._lock = threading.Lock()
 
@@ -428,7 +429,7 @@ class ModelRouter:
 # 单例 & 便捷函数
 # ──────────────────────────────────────────────
 
-_router: Optional[ModelRouter] = None
+_router: ModelRouter | None = None
 
 
 def get_model_router() -> ModelRouter:

@@ -7,11 +7,13 @@
 import json
 import time
 from datetime import datetime
+
+import structlog
+
+from app.agents.prompt_loader import get_prompt_loader
 from app.agents.state import AgentState, DecisionStatus, RiskLevel
 from app.agents.tools.risk_tools import calculate_risk_score, query_historical_patterns
-from app.agents.prompt_loader import get_prompt_loader
 from app.core.llm import get_llm
-import structlog
 
 logger = structlog.get_logger(__name__)
 

@@ -6,10 +6,11 @@
 """
 import time
 from datetime import datetime
-from app.agents.state import AgentState, DecisionStatus
-from app.agents.tools.data_tools import get_raw_data, check_data_quality
-from app.core.llm import get_llm
+
 import structlog
+
+from app.agents.state import AgentState, DecisionStatus
+from app.agents.tools.data_tools import check_data_quality, get_raw_data
 
 logger = structlog.get_logger(__name__)
 

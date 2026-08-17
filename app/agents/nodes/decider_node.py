@@ -8,13 +8,14 @@
 1. 规则引擎（rule_nodes 决策树，若 DB 中存在活跃规则）
 2. 决策阈值矩阵（内置兜底）
 """
-import json
 import time
 from datetime import datetime
-from app.agents.state import AgentState, DecisionStatus, RiskLevel
-from app.agents.prompt_loader import get_prompt_loader
-from app.core.llm import get_llm
+
 import structlog
+
+from app.agents.prompt_loader import get_prompt_loader
+from app.agents.state import AgentState, DecisionStatus
+from app.core.llm import get_llm
 
 logger = structlog.get_logger(__name__)
 

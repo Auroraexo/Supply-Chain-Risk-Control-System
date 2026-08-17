@@ -2,9 +2,9 @@
 import asyncio
 import concurrent.futures
 import json
+
 import structlog
 from langchain_core.tools import tool
-from typing import Optional
 
 logger = structlog.get_logger(__name__)
 
@@ -104,7 +104,7 @@ def get_raw_data(raw_data_id: str) -> dict:
 
 
 @tool
-def check_data_quality(raw_data: dict, expected_fields: Optional[list[str]] = None) -> dict:
+def check_data_quality(raw_data: dict, expected_fields: list[str] | None = None) -> dict:
     """检查数据质量。
 
     Args:

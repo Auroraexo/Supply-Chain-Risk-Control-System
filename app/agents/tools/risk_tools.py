@@ -1,7 +1,6 @@
 """风险计算工具。"""
 import asyncio
 import concurrent.futures
-from typing import Optional
 
 import structlog
 from langchain_core.tools import tool
@@ -48,15 +47,18 @@ def query_historical_patterns(entity_id: str, pattern_type: str = "risk", limit:
 
 def _query_historical_sync(entity_id: str, pattern_type: str, limit: int) -> dict:
     """同步桥接：在事件循环中安全地运行异步历史查询。"""
-    factory = lambda: _query_historical_async(entity_id, pattern_type, limit)
+
+    def _factory():
+        return _query_historical_async(entity_id, pattern_type, limit)
+
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(factory())
+        return asyncio.run(_factory())
 
     # 已有运行中的事件循环（如 FastAPI 请求上下文），用线程池桥接
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(asyncio.run, factory())
+        future = executor.submit(asyncio.run, _factory())
         return future.result(timeout=10)
 
 

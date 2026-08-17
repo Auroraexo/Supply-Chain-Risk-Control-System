@@ -6,8 +6,10 @@
 """
 import time
 from datetime import datetime
-from app.agents.state import AgentState, DecisionStatus
+
 import structlog
+
+from app.agents.state import AgentState, DecisionStatus
 
 logger = structlog.get_logger(__name__)
 
