@@ -102,7 +102,7 @@ export interface DashboardSummary {
   low_count: number;
   pending_decisions: number;
   active_rules: number;
-  last_updated: string | null;
+  last_updated: string;
 }
 
 export interface RiskTrendPoint {
@@ -125,6 +125,8 @@ export interface LLMConfig {
   provider: string;
   model: string;
   api_key: string;
+  base_url: string;
+  ollama_base_url: string;
   temperature: number;
   max_tokens: number;
   mock_mode: boolean;

@@ -6,9 +6,9 @@ import { Select } from '@/components/ui/Select';
 import { Tabs } from '@/components/ui/Tabs';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useToastStore } from '@/stores/toastStore';
-import { Save, Cpu, RefreshCw, Bell, Loader2 } from 'lucide-react';
+import { Save, Cpu, RefreshCw, Bell, Loader2, Server, Database, Download, ExternalLink } from 'lucide-react';
 import { settingsService } from '@/services/settingsService';
-import type { NotificationChannel } from '@/services/settingsService';
+import type { NotificationChannel, OllamaModelInfo } from '@/services/settingsService';
 import { UserManagement } from './UserManagement';
 
 const settingsTabs = [
@@ -20,25 +20,44 @@ const settingsTabs = [
 
 export function LLMConfig() {
   const [config, setConfig] = useState({
-    provider: 'openai',
-    model: 'gpt-4o-mini',
+    provider: 'local',
+    model: '',
     api_key: '',
+    base_url: '',
+    ollama_base_url: 'http://localhost:11434',
     temperature: 0.7,
     max_tokens: 4096,
-    mock_mode: true,
+    mock_mode: false,
     smart_routing: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [scanningModels, setScanningModels] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModelInfo[]>([]);
+  const [ollamaMessage, setOllamaMessage] = useState('');
+  const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null);
   const { addToast } = useToastStore();
+
+  const isLocal = config.provider === 'local';
+  const needsApiKey = !isLocal;
 
   useEffect(() => {
     async function fetchConfig() {
       try {
         const res = await settingsService.getLLMConfig();
         if (res.data) {
-          setConfig(res.data);
+          setConfig({
+            provider: res.data.provider || 'local',
+            model: res.data.model || '',
+            api_key: res.data.api_key || '',
+            base_url: res.data.base_url || '',
+            ollama_base_url: res.data.ollama_base_url || 'http://localhost:11434',
+            temperature: typeof res.data.temperature === 'number' ? res.data.temperature : 0.7,
+            max_tokens: typeof res.data.max_tokens === 'number' ? res.data.max_tokens : 4096,
+            mock_mode: !!res.data.mock_mode,
+            smart_routing: !!res.data.smart_routing,
+          });
         }
       } catch {
         addToast({ type: 'error', title: '加载失败', message: '无法获取LLM配置' });
@@ -48,6 +67,14 @@ export function LLMConfig() {
     }
     fetchConfig();
   }, [addToast]);
+
+  // 切换到 Ollama 时自动扫描模型
+  useEffect(() => {
+    if (isLocal && !loading && config.ollama_base_url && ollamaAvailable === null) {
+      handleScanModels();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLocal, loading]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -68,16 +95,50 @@ export function LLMConfig() {
         provider: config.provider,
         model: config.model,
         api_key: config.api_key,
+        base_url: config.base_url,
+        ollama_base_url: config.ollama_base_url,
       });
       if (res.data?.success) {
         addToast({ type: 'success', title: '连接测试成功', message: `${res.data.message} (${res.data.latency_ms}ms)` });
       } else {
         addToast({ type: 'error', title: '连接测试失败', message: res.data?.message || '未知错误' });
       }
-    } catch {
+    } catch (e) {
       addToast({ type: 'error', title: '测试失败', message: '无法连接到LLM服务' });
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleScanModels = async () => {
+    setScanningModels(true);
+    setOllamaMessage('');
+    try {
+      const res = await settingsService.listOllamaModels(config.ollama_base_url);
+      if (res.data) {
+        setOllamaModels(res.data.models || []);
+        setOllamaAvailable(res.data.available);
+        setOllamaMessage(res.data.message || '');
+        if (res.data.available) {
+          // 如果当前未选择模型，自动选第一个
+          if (!config.model && res.data.models.length > 0) {
+            setConfig((prev) => ({ ...prev, model: res.data.models[0].name }));
+          }
+          addToast({
+            type: res.data.models.length > 0 ? 'success' : 'warning',
+            title: '扫描完成',
+            message: res.data.message,
+          });
+        } else {
+          addToast({ type: 'warning', title: 'Ollama 未就绪', message: res.data.message });
+        }
+      }
+    } catch {
+      setOllamaAvailable(false);
+      setOllamaMessage('扫描失败，请检查 Ollama 服务地址');
+      addToast({ type: 'error', title: '扫描失败', message: '无法获取 Ollama 模型列表' });
+    } finally {
+      setScanningModels(false);
     }
   };
 
@@ -119,48 +180,224 @@ export function LLMConfig() {
         <Select
           label="LLM Provider"
           options={[
+            { value: 'local', label: '本地模型 (Ollama) - 推荐免费' },
             { value: 'openai', label: 'OpenAI' },
             { value: 'azure_openai', label: 'Azure OpenAI' },
-            { value: 'anthropic', label: 'Anthropic' },
-            { value: 'local', label: '本地模型 (Ollama)' },
+            { value: 'anthropic', label: 'Anthropic (Claude)' },
           ]}
           value={config.provider}
           onChange={(e) => setConfig({ ...config, provider: e.target.value })}
         />
-        <Input
-          label="模型名称"
-          value={config.model}
-          onChange={(e) => setConfig({ ...config, model: e.target.value })}
-        />
-        <Input
-          label="API Key"
-          type="password"
-          value={config.api_key}
-          onChange={(e) => setConfig({ ...config, api_key: e.target.value })}
-        />
-        <div className="flex flex-col gap-1.5">
-          <label className="text-caption font-medium text-text-secondary">
-            Temperature ({config.temperature})
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="2"
-            step="0.1"
-            value={config.temperature}
-            onChange={(e) => setConfig({ ...config, temperature: parseFloat(e.target.value) })}
-            className="w-full accent-accent-blue"
-          />
-        </div>
-        <Input
-          label="Max Tokens"
-          type="number"
-          value={config.max_tokens}
-          onChange={(e) => setConfig({ ...config, max_tokens: parseInt(e.target.value) })}
-        />
-        <div className="flex flex-col gap-3 pt-2">
+
+        {isLocal ? (
+          <>
+            {/* Ollama 专用配置 */}
+            <div className="md:col-span-2 p-4 rounded-btn bg-bg-primary/40 border border-accent-blue/20 space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Server size={16} className="text-accent-blue" />
+                <span className="text-body font-medium text-text-primary">Ollama 本地服务设置</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <Input
+                    label="Ollama 服务地址"
+                    placeholder="http://localhost:11434"
+                    value={config.ollama_base_url}
+                    onChange={(e) => setConfig({ ...config, ollama_base_url: e.target.value })}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleScanModels}
+                    disabled={scanningModels}
+                  >
+                    {scanningModels ? (
+                      <Loader2 size={14} className="animate-spin mr-1" />
+                    ) : (
+                      <Database size={14} className="mr-1" />
+                    )}
+                    扫描本地模型
+                  </Button>
+                </div>
+              </div>
+
+              {/* 状态提示 */}
+              {ollamaMessage && (
+                <div
+                  className={`flex items-start gap-2 p-3 rounded-btn text-caption ${
+                    ollamaAvailable
+                      ? 'bg-risk-low/10 border border-risk-low/20 text-risk-low'
+                      : 'bg-risk-critical/10 border border-risk-critical/20 text-risk-critical'
+                  }`}
+                >
+                  <span>{ollamaAvailable ? '✓' : '⚠'}</span>
+                  <span>{ollamaMessage}</span>
+                </div>
+              )}
+
+              {/* 模型列表下拉 */}
+              {ollamaAvailable && ollamaModels.length > 0 && (
+                <div>
+                  <label className="text-caption font-medium text-text-secondary mb-1.5 block">
+                    选择模型（发现 {ollamaModels.length} 个可用模型）
+                  </label>
+                  <select
+                    className="w-full h-10 px-3 rounded-btn bg-bg-primary border border-border text-body text-text-primary focus:outline-none focus:border-accent-blue/50"
+                    value={config.model}
+                    onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                  >
+                    <option value="">-- 请选择模型 --</option>
+                    {ollamaModels.map((m) => (
+                      <option key={m.name} value={m.name}>
+                        {m.name}
+                        {m.size ? `  (${m.size}${m.parameter_count ? `, ${m.parameter_count}` : ''})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Ollama 未安装引导 */}
+              {!ollamaAvailable && (
+                <div className="p-3 rounded-btn bg-bg-primary/60 border border-border space-y-2">
+                  <p className="text-caption text-text-secondary">
+                    <span className="text-accent-blue font-medium">使用 Ollama 本地模型步骤：</span>
+                  </p>
+                  <ol className="list-decimal list-inside text-caption text-text-muted space-y-1 ml-1">
+                    <li>
+                      下载并安装 Ollama：
+                      <a
+                        href="https://ollama.com/download"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-accent-blue hover:underline ml-1"
+                      >
+                        https://ollama.com/download <ExternalLink size={10} />
+                      </a>
+                    </li>
+                    <li>
+                      启动 Ollama，打开 PowerShell 运行命令安装模型（任选其一）：
+                    </li>
+                  </ol>
+                  <div className="bg-bg-tertiary/60 rounded-btn p-3 space-y-1.5 font-mono text-caption">
+                    <div className="flex items-center justify-between gap-2">
+                      <code className="text-accent-cyan">ollama run qwen2.5:7b</code>
+                      <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText('ollama run qwen2.5:7b')}>
+                        复制
+                      </Button>
+                    </div>
+                    <p className="text-text-muted text-[11px]">推荐：通义千问 2.5 7B · 适合中文场景 · ~4.7GB</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <code className="text-accent-cyan">ollama run llama3.1:8b</code>
+                      <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText('ollama run llama3.1:8b')}>
+                        复制
+                      </Button>
+                    </div>
+                    <p className="text-text-muted text-[11px]">Llama 3.1 8B · 英文能力强 · ~4.7GB</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <code className="text-accent-cyan">ollama run gemma2:9b</code>
+                      <Button size="sm" variant="ghost" onClick={() => navigator.clipboard.writeText('ollama run gemma2:9b')}>
+                        复制
+                      </Button>
+                    </div>
+                    <p className="text-text-muted text-[11px]">Google Gemma2 9B · 轻量高性能 · ~5.5GB</p>
+                  </div>
+                  <p className="text-caption text-text-muted">
+                    <Download size={12} className="inline mr-1" />
+                    安装完成后点击"扫描本地模型"按钮即可。
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-caption font-medium text-text-secondary">
+                Temperature ({config.temperature.toFixed(1)})
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                value={config.temperature}
+                onChange={(e) => setConfig({ ...config, temperature: parseFloat(e.target.value) })}
+                className="w-full accent-accent-blue"
+              />
+            </div>
+
+            <Input
+              label="Max Tokens"
+              type="number"
+              value={config.max_tokens}
+              onChange={(e) => setConfig({ ...config, max_tokens: parseInt(e.target.value || '4096') })}
+            />
+          </>
+        ) : (
+          <>
+            {/* 云端 Provider 配置 */}
+            <Input
+              label="模型名称"
+              placeholder={
+                config.provider === 'openai' ? '如 gpt-4o-mini'
+                  : config.provider === 'anthropic' ? '如 claude-3-5-sonnet-20241022'
+                    : '请输入模型名称'
+              }
+              value={config.model}
+              onChange={(e) => setConfig({ ...config, model: e.target.value })}
+            />
+
+            {needsApiKey && (
+              <Input
+                label="API Key"
+                type="password"
+                placeholder={config.provider === 'openai' ? 'sk-...' : '请输入 API Key'}
+                value={config.api_key}
+                onChange={(e) => setConfig({ ...config, api_key: e.target.value })}
+              />
+            )}
+
+            {(config.provider === 'openai' || config.provider === 'azure_openai') && (
+              <Input
+                label="Base URL（可选，兼容 API 代理地址）"
+                placeholder="默认: https://api.openai.com/v1"
+                value={config.base_url}
+                onChange={(e) => setConfig({ ...config, base_url: e.target.value })}
+              />
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-caption font-medium text-text-secondary">
+                Temperature ({config.temperature.toFixed(1)})
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                value={config.temperature}
+                onChange={(e) => setConfig({ ...config, temperature: parseFloat(e.target.value) })}
+                className="w-full accent-accent-blue"
+              />
+            </div>
+
+            <Input
+              label="Max Tokens"
+              type="number"
+              value={config.max_tokens}
+              onChange={(e) => setConfig({ ...config, max_tokens: parseInt(e.target.value || '4096') })}
+            />
+          </>
+        )}
+
+        <div className="md:col-span-2 flex flex-col gap-3 pt-2">
           <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-body text-text-secondary">Mock 模式</span>
+            <div className="flex flex-col">
+              <span className="text-body text-text-secondary">Mock 模式</span>
+              <span className="text-caption text-text-muted">使用模拟响应，无需真实模型（用于演示）</span>
+            </div>
             <button
               onClick={() => setConfig({ ...config, mock_mode: !config.mock_mode })}
               className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${config.mock_mode ? 'bg-accent-blue' : 'bg-bg-tertiary'}`}
@@ -169,7 +406,10 @@ export function LLMConfig() {
             </button>
           </label>
           <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-body text-text-secondary">智能路由</span>
+            <div className="flex flex-col">
+              <span className="text-body text-text-secondary">智能路由 (Ollama)</span>
+              <span className="text-caption text-text-muted">根据查询复杂度自动选择大/小模型</span>
+            </div>
             <button
               onClick={() => setConfig({ ...config, smart_routing: !config.smart_routing })}
               className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${config.smart_routing ? 'bg-accent-blue' : 'bg-bg-tertiary'}`}

@@ -143,7 +143,7 @@ export function Dashboard() {
         const [summaryRes, alertsRes, trendsRes] = await Promise.all([
           dashboardService.getSummary(),
           dashboardService.getAlerts(10),
-          dashboardService.getTrends(30),
+          dashboardService.getTrends(7),
         ]);
         setSummary(summaryRes.data);
         setAlerts(alertsRes.data);
@@ -186,13 +186,10 @@ export function Dashboard() {
     low_count: 0,
     pending_decisions: 0,
     active_rules: 0,
-    last_updated: null,
+    last_updated: new Date().toISOString(),
   };
 
   const displaySummary = summary || defaultSummary;
-  const lastUpdatedDisplay = displaySummary.last_updated
-    ? new Date(displaySummary.last_updated).toLocaleDateString('zh-CN')
-    : '暂无数据';
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -217,7 +214,7 @@ export function Dashboard() {
           value={displaySummary.total_risks}
           icon={<AlertTriangle size={16} className="text-accent-cyan" />}
           accent="#06B6D4"
-          trend={`上次更新: ${lastUpdatedDisplay}`}
+          trend={`上次更新: ${new Date(displaySummary.last_updated).toLocaleDateString('zh-CN')}`}
         />
         <StatCard
           label="严重/高风险"
