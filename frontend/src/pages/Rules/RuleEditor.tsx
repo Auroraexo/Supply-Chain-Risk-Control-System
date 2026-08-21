@@ -4,11 +4,10 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
-import {
-  ChevronRight, ChevronDown, Plus, ToggleLeft, ToggleRight, Edit3, Trash2, Save, Loader2, GripVertical, Play,
-} from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, ToggleLeft, ToggleRight, Edit3, Trash2, Save, Loader2, GripVertical, Play, Copy, EyeOff } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { ruleService } from '@/services/ruleService';
+import { ContextMenu } from '@/components/ui/ContextMenu';
 import type { RuleNode } from '@/types/models';
 import {
   DndContext,
@@ -59,6 +58,7 @@ function RuleNodeItem({
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(node.rule_name);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const { addToast } = useToastStore();
   const hasChildren = node.children && node.children.length > 0;
 
@@ -86,6 +86,7 @@ function RuleNodeItem({
     <div>
       <div className="flex items-center gap-2 py-2 px-2 rounded-btn hover:bg-bg-tertiary/30 transition-colors group"
         style={{ paddingLeft: `${depth * 24 + 8}px` }}
+        onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY }); }}
       >
         {/* 拖拽手柄 */}
         {dragHandleProps && (
@@ -154,6 +155,21 @@ function RuleNodeItem({
             <SortableRuleNode key={child.id} node={child} depth={depth + 1} onRefresh={onRefresh} />
           ))}
         </SortableContext>
+      )}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+          items={[
+            { label: '编辑节点', icon: <Edit3 size={14} />, onClick: () => { setEditing(true); setEditName(node.rule_name); } },
+            { label: '复制节点', icon: <Copy size={14} />, onClick: () => addToast({ type: 'info', title: '已复制', message: `节点 "${node.rule_name}" 已复制到剪贴板` }) },
+            { label: '添加子节点', icon: <Plus size={14} />, onClick: () => addToast({ type: 'info', title: '添加子节点', message: '请使用工具栏"添加节点"按钮' }) },
+            { divider: true },
+            { label: node.is_active ? '禁用节点' : '启用节点', icon: <EyeOff size={14} />, onClick: handleToggle },
+            { label: '删除节点', icon: <Trash2 size={14} />, danger: true, onClick: handleDelete },
+          ]}
+        />
       )}
     </div>
   );

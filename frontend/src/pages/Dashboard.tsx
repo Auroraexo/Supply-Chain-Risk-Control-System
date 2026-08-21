@@ -3,6 +3,8 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { RiskLevelBadge } from '@/components/business/RiskLevelBadge';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { CountUp } from '@/components/ui/CountUp';
+import { RingProgress } from '@/components/ui/RingProgress';
 import {
   AlertTriangle, TrendingUp, Clock, GitBranch, Shield, ArrowRight, Activity, Scale,
 } from 'lucide-react';
@@ -38,7 +40,9 @@ function StatCard({
             </div>
             <span className="text-caption text-text-muted">{label}</span>
           </div>
-          <p className="text-display font-mono text-text-primary tabular-nums">{value}</p>
+          <p className="text-display font-mono text-text-primary tabular-nums">
+            {typeof value === 'number' ? <CountUp end={value} duration={1000} /> : value}
+          </p>
           {trend && <p className="text-caption text-text-muted">{trend}</p>}
         </div>
       </div>
@@ -139,7 +143,7 @@ export function Dashboard() {
         const [summaryRes, alertsRes, trendsRes] = await Promise.all([
           dashboardService.getSummary(),
           dashboardService.getAlerts(10),
-          dashboardService.getTrends(7),
+          dashboardService.getTrends(30),
         ]);
         setSummary(summaryRes.data);
         setAlerts(alertsRes.data);
@@ -182,10 +186,13 @@ export function Dashboard() {
     low_count: 0,
     pending_decisions: 0,
     active_rules: 0,
-    last_updated: new Date().toISOString(),
+    last_updated: null,
   };
 
   const displaySummary = summary || defaultSummary;
+  const lastUpdatedDisplay = displaySummary.last_updated
+    ? new Date(displaySummary.last_updated).toLocaleDateString('zh-CN')
+    : '暂无数据';
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -210,7 +217,7 @@ export function Dashboard() {
           value={displaySummary.total_risks}
           icon={<AlertTriangle size={16} className="text-accent-cyan" />}
           accent="#06B6D4"
-          trend={`上次更新: ${new Date(displaySummary.last_updated).toLocaleDateString('zh-CN')}`}
+          trend={`上次更新: ${lastUpdatedDisplay}`}
         />
         <StatCard
           label="严重/高风险"
@@ -232,6 +239,64 @@ export function Dashboard() {
           accent="#8B5CF6"
         />
       </div>
+
+      {/* Risk Level Rings */}
+      {displaySummary.total_risks > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Card hover className="flex flex-col items-center py-5">
+            <div className="relative inline-flex">
+              <RingProgress
+                value={displaySummary.critical_count}
+                max={displaySummary.total_risks}
+                color="#EF4444"
+                size={72}
+                strokeWidth={5}
+              />
+            </div>
+            <span className="text-caption text-text-muted mt-2">严重</span>
+            <span className="text-body font-bold text-risk-critical">{displaySummary.critical_count}</span>
+          </Card>
+          <Card hover className="flex flex-col items-center py-5">
+            <div className="relative inline-flex">
+              <RingProgress
+                value={displaySummary.high_count}
+                max={displaySummary.total_risks}
+                color="#F97316"
+                size={72}
+                strokeWidth={5}
+              />
+            </div>
+            <span className="text-caption text-text-muted mt-2">高风险</span>
+            <span className="text-body font-bold text-risk-high">{displaySummary.high_count}</span>
+          </Card>
+          <Card hover className="flex flex-col items-center py-5">
+            <div className="relative inline-flex">
+              <RingProgress
+                value={displaySummary.medium_count}
+                max={displaySummary.total_risks}
+                color="#F59E0B"
+                size={72}
+                strokeWidth={5}
+              />
+            </div>
+            <span className="text-caption text-text-muted mt-2">中风险</span>
+            <span className="text-body font-bold text-risk-medium">{displaySummary.medium_count}</span>
+          </Card>
+          <Card hover className="flex flex-col items-center py-5">
+            <div className="relative inline-flex">
+              <RingProgress
+                value={displaySummary.low_count}
+                max={displaySummary.total_risks}
+                color="#10B981"
+                size={72}
+                strokeWidth={5}
+              />
+            </div>
+            <span className="text-caption text-text-muted mt-2">低风险</span>
+            <span className="text-body font-bold text-risk-low">{displaySummary.low_count}</span>
+          </Card>
+        </div>
+      )}
 
       {/* Trend & Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

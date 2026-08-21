@@ -102,7 +102,7 @@ export interface DashboardSummary {
   low_count: number;
   pending_decisions: number;
   active_rules: number;
-  last_updated: string;
+  last_updated: string | null;
 }
 
 export interface RiskTrendPoint {

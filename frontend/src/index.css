@@ -106,4 +106,11 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  /* Shimmer skeleton background */
+  .shimmer-bg {
+    background: linear-gradient(90deg, #334155 25%, #475569 50%, #334155 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
 }

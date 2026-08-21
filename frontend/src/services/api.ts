@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { ApiResponse } from '@/types/api';
+import { useProgressStore } from '@/stores/progressStore';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
@@ -9,17 +10,35 @@ const api = axios.create({
   },
 });
 
+let activeRequests = 0;
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  activeRequests++;
+  if (activeRequests === 1) {
+    useProgressStore.getState().start();
+  }
   return config;
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    activeRequests--;
+    if (activeRequests <= 0) {
+      activeRequests = 0;
+      useProgressStore.getState().done();
+    }
+    return response;
+  },
   (error) => {
+    activeRequests--;
+    if (activeRequests <= 0) {
+      activeRequests = 0;
+      useProgressStore.getState().done();
+    }
     if (error.response?.status === 401) {
       localStorage.removeItem('auth_token');
       window.location.href = '/login';

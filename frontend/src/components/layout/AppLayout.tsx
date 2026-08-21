@@ -2,6 +2,8 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { ToastContainer } from '@/components/ui/Toast';
+import { TopProgressBar } from '@/components/ui/TopProgressBar';
+import { PageTransition } from '@/components/ui/PageTransition';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { clsx } from 'clsx';
@@ -11,6 +13,7 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-bg-primary">
+      <TopProgressBar />
       <Sidebar />
       <div
         className={clsx(
@@ -22,7 +25,9 @@ export function AppLayout() {
         <Header />
         <main className="p-4 lg:p-6 max-w-[1400px] mx-auto">
           <ErrorBoundary>
-            <Outlet />
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
           </ErrorBoundary>
         </main>
       </div>

@@ -22,7 +22,8 @@ async def get_summary(db: DBSession):
                 COALESCE(SUM(CASE WHEN risk_level = 'critical' THEN 1 ELSE 0 END), 0) as critical_count,
                 COALESCE(SUM(CASE WHEN risk_level = 'high' THEN 1 ELSE 0 END), 0) as high_count,
                 COALESCE(SUM(CASE WHEN risk_level = 'medium' THEN 1 ELSE 0 END), 0) as medium_count,
-                COALESCE(SUM(CASE WHEN risk_level = 'low' THEN 1 ELSE 0 END), 0) as low_count
+                COALESCE(SUM(CASE WHEN risk_level = 'low' THEN 1 ELSE 0 END), 0) as low_count,
+                MAX(created_at) as last_updated
             FROM analysis_results
         """)
     )
@@ -32,23 +33,32 @@ async def get_summary(db: DBSession):
     pending = await db.execute(
         text("SELECT COUNT(*) FROM decision_results WHERE decision = 'escalate' OR decision = 'pending_review'")
     )
-    pending_count = pending.fetchone()[0]
+    pending_count = int(pending.fetchone()[0] or 0)
 
     # 活跃规则数
     active_rules = await db.execute(
         text("SELECT COUNT(*) FROM rule_nodes WHERE is_active = 1")
     )
-    active_count = active_rules.fetchone()[0]
+    active_count = int(active_rules.fetchone()[0] or 0)
+
+    # 处理 last_updated
+    last_updated_val = row[5] if row[5] else None
+    if last_updated_val and hasattr(last_updated_val, 'isoformat'):
+        last_updated_str = last_updated_val.isoformat()
+    elif last_updated_val:
+        last_updated_str = str(last_updated_val)
+    else:
+        last_updated_str = None
 
     return DataResponse(data={
-        "total_risks": row[0] or 0,
-        "critical_count": row[1] or 0,
-        "high_count": row[2] or 0,
-        "medium_count": row[3] or 0,
-        "low_count": row[4] or 0,
+        "total_risks": int(row[0] or 0),
+        "critical_count": int(row[1] or 0),
+        "high_count": int(row[2] or 0),
+        "medium_count": int(row[3] or 0),
+        "low_count": int(row[4] or 0),
         "pending_decisions": pending_count,
         "active_rules": active_count,
-        "last_updated": None,
+        "last_updated": last_updated_str,
     })
 
 
@@ -71,7 +81,13 @@ async def get_trends(db: DBSession, days: int = 7):
         {"days": days}
     )
     data = [
-        {"date": str(row[0]), "critical": row[1], "high": row[2], "medium": row[3], "low": row[4]}
+        {
+            "date": str(row[0]),
+            "critical": int(row[1] or 0),
+            "high": int(row[2] or 0),
+            "medium": int(row[3] or 0),
+            "low": int(row[4] or 0),
+        }
         for row in trends.fetchall()
     ]
     return DataResponse(data=data)
