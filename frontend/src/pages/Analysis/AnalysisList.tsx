@@ -88,6 +88,8 @@ export function AnalysisList() {
               onClick={() => setViewMode('list')}
               className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-accent-blue text-white' : 'text-text-muted hover:text-text-primary'}`}
               title="列表视图"
+              aria-label="列表视图"
+              aria-pressed={viewMode === 'list'}
             >
               <List size={16} />
             </button>
@@ -95,6 +97,8 @@ export function AnalysisList() {
               onClick={() => setViewMode('card')}
               className={`p-1.5 transition-colors ${viewMode === 'card' ? 'bg-accent-blue text-white' : 'text-text-muted hover:text-text-primary'}`}
               title="卡片视图"
+              aria-label="卡片视图"
+              aria-pressed={viewMode === 'card'}
             >
               <LayoutGrid size={16} />
             </button>

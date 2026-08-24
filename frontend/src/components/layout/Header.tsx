@@ -19,6 +19,7 @@ export function Header() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMobileOpen(true)}
+            aria-label="打开导航菜单"
             className="lg:hidden text-text-secondary hover:text-text-primary transition-colors"
           >
             <Menu size={20} />
@@ -28,6 +29,7 @@ export function Header() {
             <input
               type="text"
               placeholder="搜索..."
+              aria-label="全局搜索"
               className="bg-transparent text-body text-text-primary placeholder:text-text-muted outline-none w-40"
             />
           </div>
@@ -35,7 +37,7 @@ export function Header() {
 
         {/* Right */}
         <div className="flex items-center gap-2">
-          <button className="relative p-2 rounded-btn text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50 transition-colors">
+          <button aria-label="通知" className="relative p-2 rounded-btn text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/50 transition-colors">
             <Bell size={18} />
             <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-risk-critical animate-pulse-dot" />
           </button>

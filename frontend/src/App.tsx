@@ -11,6 +11,7 @@ import { DecisionApproval } from '@/pages/Decisions/DecisionApproval';
 import { RuleEditor } from '@/pages/Rules/RuleEditor';
 import { RuleVersions } from '@/pages/Rules/RuleVersions';
 import { Settings } from '@/pages/Settings/Settings';
+import { NotFound } from '@/pages/NotFound';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
           <Route path="rules/versions" element={<RuleVersions />} />
           <Route path="settings/llm" element={<Settings />} />
           <Route path="settings/*" element={<Settings />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </BrowserRouter>

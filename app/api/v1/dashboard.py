@@ -40,15 +40,21 @@ async def get_summary(db: DBSession):
     )
     active_count = active_rules.fetchone()[0]
 
+    # 最近更新时间：取分析结果表中最新的记录时间
+    last_updated_row = await db.execute(
+        text("SELECT MAX(created_at) FROM analysis_results")
+    )
+    last_updated_val = last_updated_row.fetchone()[0]
+
     return DataResponse(data={
-        "total_risks": row[0] or 0,
-        "critical_count": row[1] or 0,
-        "high_count": row[2] or 0,
-        "medium_count": row[3] or 0,
-        "low_count": row[4] or 0,
-        "pending_decisions": pending_count,
-        "active_rules": active_count,
-        "last_updated": None,
+        "total_risks": int(row[0] or 0),
+        "critical_count": int(row[1] or 0),
+        "high_count": int(row[2] or 0),
+        "medium_count": int(row[3] or 0),
+        "low_count": int(row[4] or 0),
+        "pending_decisions": int(pending_count),
+        "active_rules": int(active_count),
+        "last_updated": str(last_updated_val) if last_updated_val else None,
     })
 
 
@@ -71,7 +77,7 @@ async def get_trends(db: DBSession, days: int = 7):
         {"days": days}
     )
     data = [
-        {"date": str(row[0]), "critical": row[1], "high": row[2], "medium": row[3], "low": row[4]}
+        {"date": str(row[0]), "critical": int(row[1]), "high": int(row[2]), "medium": int(row[3]), "low": int(row[4])}
         for row in trends.fetchall()
     ]
     return DataResponse(data=data)

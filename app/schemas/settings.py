@@ -56,3 +56,18 @@ class NotificationSettingsRequest(BaseModel):
 class NotificationSettingsResponse(BaseModel):
     """通知设置响应。"""
     channels: list[NotificationChannel]
+
+
+class OllamaModelInfo(BaseModel):
+    """Ollama 模型信息。"""
+    name: str
+    size: str
+    parameter_count: str = ""
+    modified_at: str = ""
+
+
+class OllamaModelListResponse(BaseModel):
+    """Ollama 模型列表响应。"""
+    models: list[OllamaModelInfo]
+    available: bool
+    message: str

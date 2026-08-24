@@ -45,6 +45,7 @@ const NavButton = memo(function NavButton({
     <button
       onClick={onClick}
       title={collapsed ? item.label : undefined}
+      aria-label={item.label}
       disabled={disabled}
       className={clsx(
         'w-full flex items-center gap-3 px-3 py-2.5 rounded-btn transition-all duration-200 select-none',
@@ -140,6 +141,7 @@ const SidebarContent = memo(function SidebarContent({
         <button
           onClick={handleLogout}
           title={collapsed ? '退出' : undefined}
+          aria-label="退出登录"
           className={clsx(
             'w-full flex items-center gap-3 px-3 py-2.5 rounded-btn text-text-secondary hover:bg-risk-critical/10 hover:text-risk-critical transition-all duration-200 select-none',
             collapsed && 'justify-center'
@@ -197,6 +199,7 @@ export function Sidebar() {
         <div className="px-2 pb-3 mt-auto">
           <button
             onClick={toggleCollapsed}
+            aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
             className="w-full flex items-center justify-center py-2 rounded-btn text-text-muted hover:text-text-primary hover:bg-bg-tertiary/50 transition-all duration-200"
           >
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
@@ -214,7 +217,7 @@ export function Sidebar() {
           />
           {/* 侧边栏 — stopPropagation 防止点击事件冒泡到遮罩层 */}
           <aside
-            className="absolute top-0 left-0 h-screen w-60 bg-bg-secondary border-r border-border animate-slide-in-right"
+            className="absolute top-0 left-0 h-screen w-60 bg-bg-secondary border-r border-border animate-slide-in-left"
             onClick={(e) => e.stopPropagation()}
           >
             <SidebarContent

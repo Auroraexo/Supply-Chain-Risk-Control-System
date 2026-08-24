@@ -14,6 +14,14 @@ import {
 import { dashboardService } from '@/services/dashboardService';
 import type { DashboardSummary, RiskTrendPoint, AlertItem } from '@/types/models';
 
+/** 风险等级对应的主题色（与 tailwind.config.js 中 risk-* token 保持一致） */
+const RISK_COLORS = {
+  critical: '#EF4444', // risk-critical
+  high: '#F97316', // risk-high
+  medium: '#F59E0B', // risk-medium
+  low: '#10B981', // risk-low
+} as const;
+
 function StatCard({
   label,
   value,
@@ -57,7 +65,7 @@ function AlertTimeline({ alerts }: { alerts: AlertItem[] }) {
         <div key={alert.id} className="flex gap-3 py-3 border-b border-border/30 last:border-b-0 animate-fade-in" style={{ animationDelay: `${i * 80}ms` }}>
           <div className="relative flex-shrink-0">
             <div className="w-2.5 h-2.5 rounded-full mt-1.5" style={{
-              backgroundColor: alert.type === 'critical' ? '#EF4444' : alert.type === 'high' ? '#F97316' : alert.type === 'medium' ? '#F59E0B' : '#10B981',
+              backgroundColor: RISK_COLORS[alert.type] ?? RISK_COLORS.low,
             }} />
             {i < alerts.length - 1 && <div className="absolute top-4 left-1 w-0.5 h-full bg-border/30" />}
           </div>
@@ -89,20 +97,20 @@ function TrendChart({ data }: { data: RiskTrendPoint[] }) {
       <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
         <defs>
           <linearGradient id="criticalGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
+            <stop offset="5%" stopColor={RISK_COLORS.critical} stopOpacity={0.3} />
+            <stop offset="95%" stopColor={RISK_COLORS.critical} stopOpacity={0} />
           </linearGradient>
           <linearGradient id="highGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+            <stop offset="5%" stopColor={RISK_COLORS.high} stopOpacity={0.3} />
+            <stop offset="95%" stopColor={RISK_COLORS.high} stopOpacity={0} />
           </linearGradient>
           <linearGradient id="mediumGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
+            <stop offset="5%" stopColor={RISK_COLORS.medium} stopOpacity={0.3} />
+            <stop offset="95%" stopColor={RISK_COLORS.medium} stopOpacity={0} />
           </linearGradient>
           <linearGradient id="lowGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+            <stop offset="5%" stopColor={RISK_COLORS.low} stopOpacity={0.3} />
+            <stop offset="95%" stopColor={RISK_COLORS.low} stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -122,10 +130,10 @@ function TrendChart({ data }: { data: RiskTrendPoint[] }) {
           iconType="circle"
           iconSize={8}
         />
-        <Area type="monotone" dataKey="critical" stroke="#EF4444" fill="url(#criticalGrad)" strokeWidth={2} name="严重" />
-        <Area type="monotone" dataKey="high" stroke="#F97316" fill="url(#highGrad)" strokeWidth={2} name="高风险" />
-        <Area type="monotone" dataKey="medium" stroke="#F59E0B" fill="url(#mediumGrad)" strokeWidth={2} name="中风险" />
-        <Area type="monotone" dataKey="low" stroke="#10B981" fill="url(#lowGrad)" strokeWidth={2} name="低风险" />
+        <Area type="monotone" dataKey="critical" stroke={RISK_COLORS.critical} fill="url(#criticalGrad)" strokeWidth={2} name="严重" />
+        <Area type="monotone" dataKey="high" stroke={RISK_COLORS.high} fill="url(#highGrad)" strokeWidth={2} name="高风险" />
+        <Area type="monotone" dataKey="medium" stroke={RISK_COLORS.medium} fill="url(#mediumGrad)" strokeWidth={2} name="中风险" />
+        <Area type="monotone" dataKey="low" stroke={RISK_COLORS.low} fill="url(#lowGrad)" strokeWidth={2} name="低风险" />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -143,7 +151,7 @@ export function Dashboard() {
         const [summaryRes, alertsRes, trendsRes] = await Promise.all([
           dashboardService.getSummary(),
           dashboardService.getAlerts(10),
-          dashboardService.getTrends(7),
+          dashboardService.getTrends(30),
         ]);
         setSummary(summaryRes.data);
         setAlerts(alertsRes.data);
@@ -214,7 +222,7 @@ export function Dashboard() {
           value={displaySummary.total_risks}
           icon={<AlertTriangle size={16} className="text-accent-cyan" />}
           accent="#06B6D4"
-          trend={`上次更新: ${new Date(displaySummary.last_updated).toLocaleDateString('zh-CN')}`}
+          trend={`上次更新: ${displaySummary.last_updated ? new Date(displaySummary.last_updated).toLocaleDateString('zh-CN') : '暂无'}`}
         />
         <StatCard
           label="严重/高风险"
@@ -245,7 +253,7 @@ export function Dashboard() {
               <RingProgress
                 value={displaySummary.critical_count}
                 max={displaySummary.total_risks}
-                color="#EF4444"
+                color={RISK_COLORS.critical}
                 size={72}
                 strokeWidth={5}
               />
@@ -258,7 +266,7 @@ export function Dashboard() {
               <RingProgress
                 value={displaySummary.high_count}
                 max={displaySummary.total_risks}
-                color="#F97316"
+                color={RISK_COLORS.high}
                 size={72}
                 strokeWidth={5}
               />
@@ -271,7 +279,7 @@ export function Dashboard() {
               <RingProgress
                 value={displaySummary.medium_count}
                 max={displaySummary.total_risks}
-                color="#F59E0B"
+                color={RISK_COLORS.medium}
                 size={72}
                 strokeWidth={5}
               />
@@ -284,7 +292,7 @@ export function Dashboard() {
               <RingProgress
                 value={displaySummary.low_count}
                 max={displaySummary.total_risks}
-                color="#10B981"
+                color={RISK_COLORS.low}
                 size={72}
                 strokeWidth={5}
               />

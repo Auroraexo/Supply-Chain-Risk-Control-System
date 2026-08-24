@@ -44,10 +44,10 @@ const columns: TableColumn<RawData>[] = [
     header: '操作',
     render: (row) => (
       <div className="flex items-center gap-1">
-        <button className="p-1.5 rounded-btn text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 transition-colors" onClick={(e) => { e.stopPropagation(); }}>
+        <button aria-label="查看" className="p-1.5 rounded-btn text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 transition-colors" onClick={(e) => { e.stopPropagation(); }}>
           <Eye size={16} />
         </button>
-        <button className="p-1.5 rounded-btn text-text-muted hover:text-risk-critical hover:bg-risk-critical/10 transition-colors" onClick={(e) => { e.stopPropagation(); }}>
+        <button aria-label="删除" className="p-1.5 rounded-btn text-text-muted hover:text-risk-critical hover:bg-risk-critical/10 transition-colors" onClick={(e) => { e.stopPropagation(); }}>
           <Trash2 size={16} />
         </button>
       </div>
