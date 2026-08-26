@@ -2,9 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Search } from 'lucide-react';
+import { AutomationModal } from '@/components/business/AutomationModal';
+import { Search, Sparkles } from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import Empty from '@/components/Empty';
 import { decisionService } from '@/services/decisionService';
 import type { DecisionResult } from '@/types/models';
 
@@ -26,6 +30,7 @@ export function DecisionList() {
   const [decisions, setDecisions] = useState<DecisionResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [autoOpen, setAutoOpen] = useState(false);
   const navigate = useNavigate();
 
   const fetchData = useCallback(async () => {
@@ -51,10 +56,14 @@ export function DecisionList() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-h1 text-text-primary">决策管理</h1>
-        <p className="text-body text-text-secondary mt-1">管理风险决策审批与执行</p>
-      </div>
+      <PageHeader eyebrow="Decision Operations" title="决策与审批" description="处理待研判任务并追踪决策执行状态" actions={
+        <Button variant="outline" onClick={() => setAutoOpen(true)}>
+          <Sparkles size={16} />
+          AI 自动审核
+        </Button>
+      } />
+
+      <AutomationModal mode="review" open={autoOpen} onClose={() => setAutoOpen(false)} onDone={fetchData} />
 
       <Card padding="none">
         <div className="flex items-center gap-3 p-4 border-b border-border">
@@ -79,10 +88,7 @@ export function DecisionList() {
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="p-12 text-center text-text-muted">
-            <Search size={32} className="mx-auto mb-3 opacity-40" />
-            <p className="text-body">暂无决策记录</p>
-          </div>
+          <Empty title="暂无决策记录" description="完成风险分析后，需要人工研判的结果会进入这里。" icon={<Search size={24}/>} />
         ) : (
           <div className="divide-y divide-border/30">
             {filtered.map((decision) => {
@@ -90,7 +96,7 @@ export function DecisionList() {
               return (
                 <div
                   key={decision.id}
-                  className="flex items-center gap-4 p-4 hover:bg-bg-tertiary/20 cursor-pointer transition-colors"
+                  className="flex items-center gap-3 p-4 hover:bg-bg-tertiary/20 cursor-pointer transition-colors sm:gap-4"
                   onClick={() => navigate(`/decisions/${decision.id}`)}
                 >
                   <Badge variant={cfg.variant} dot={decision.decision === 'pending_review'}>

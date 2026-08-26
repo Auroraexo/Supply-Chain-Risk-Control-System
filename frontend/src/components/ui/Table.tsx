@@ -60,7 +60,7 @@ export function Table<T>({
         <tr key={i} className="border-b border-border/50">
           {columns.map((col, j) => (
             <td key={j} className="px-4 py-3">
-              <div className="h-4 bg-bg-tertiary rounded shimmer-bg" style={{ width: `${60 + Math.random() * 30}%` }} />
+              <div className="h-4 bg-bg-tertiary rounded shimmer-bg" style={{ width: `${62 + ((i + j) % 4) * 8}%` }} />
             </td>
           ))}
         </tr>
@@ -82,7 +82,7 @@ export function Table<T>({
             {columns.map((col) => (
               <th
                 key={String(col.key)}
-                className="relative px-4 py-3 text-left text-caption font-medium text-text-secondary uppercase tracking-wider select-none"
+                className="relative px-4 py-3 text-left text-caption font-semibold text-text-secondary select-none"
                 style={{ width: colWidths[String(col.key)] || col.width || 'auto' }}
               >
                 {col.header}

@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, CheckCircle, Clock, FileSearch, GitBranch, Loader2, Scale, ShieldAlert, XCircle } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { StatePanel } from '@/components/ui/StatePanel';
 import { RiskLevelBadge } from '@/components/business/RiskLevelBadge';
 import { analysisService } from '@/services/analysisService';
 import { agentLogService } from '@/services/agentLogService';
-import type { AnalysisResult, DecisionTrace, AgentExecutionStep } from '@/types/models';
+import type { AgentExecutionStep, AnalysisResult, DecisionTrace } from '@/types/models';
 
 export function AnalysisDetail() {
   const { id } = useParams<{ id: string }>();
@@ -16,218 +17,64 @@ export function AnalysisDetail() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [trace, setTrace] = useState<DecisionTrace | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [traceLoading, setTraceLoading] = useState(false);
 
-  useEffect(() => {
-    async function fetchAnalysis() {
-      if (!id) return;
-      try {
-        const res = await analysisService.getById(id);
-        setAnalysis(res.data);
-        // 尝试获取决策追踪
-        if (res.data?.request_id) {
-          setTraceLoading(true);
-          try {
-            const traceRes = await agentLogService.getDecisionTrace(res.data.request_id);
-            setTrace(traceRes.data);
-          } catch {
-            // 决策追踪可能不存在，静默处理
-          } finally {
-            setTraceLoading(false);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch analysis:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchAnalysis();
+  const fetchAnalysis = useCallback(async () => {
+    if (!id) return;
+    setLoading(true); setLoadError(false);
+    try {
+      const res = await analysisService.getById(id); setAnalysis(res.data);
+      if (res.data?.request_id) { setTraceLoading(true); try { const t = await agentLogService.getDecisionTrace(res.data.request_id); setTrace(t.data); } catch { setTrace(null); } finally { setTraceLoading(false); } }
+    } catch { setLoadError(true); setAnalysis(null); }
+    finally { setLoading(false); }
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-8 w-20" />
-          <div>
-            <Skeleton className="h-8 w-32" />
-            <Skeleton className="h-4 w-48 mt-2" />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} glass>
-              <Skeleton className="h-4 w-20 mb-2" />
-              <Skeleton className="h-8 w-16" />
-            </Card>
-          ))}
-        </div>
-        <Card>
-          <Skeleton className="h-6 w-32 mb-4" />
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-4 w-full" />
-            ))}
-          </div>
-        </Card>
-      </div>
-    );
-  }
+  useEffect(() => { void fetchAnalysis(); }, [fetchAnalysis]);
+  if (loading) return <div className="space-y-5"><Skeleton className="h-20"/><div className="grid gap-4 lg:grid-cols-3"><Skeleton className="h-[500px] lg:col-span-2"/><Skeleton className="h-[500px]"/></div></div>;
+  if (loadError) return <StatePanel title="无法加载风险分析" description="分析数据暂时不可用，请稍后重试。" onRetry={fetchAnalysis}/>;
+  if (!analysis) return <StatePanel title="分析结果不存在" description="该结果可能已删除或请求地址无效。"/>;
 
-  if (!analysis) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-          <ArrowLeft size={16} />
-          返回
-        </Button>
-        <Card className="p-12 text-center">
-          <p className="text-body text-text-muted">分析结果不存在</p>
-        </Card>
-      </div>
-    );
-  }
-
+  const score = Math.round(analysis.risk_score * 100);
+  const facts = analysis.facts_summary ? Object.entries(analysis.facts_summary) : [];
+  const riskTone = analysis.risk_level === 'critical' ? 'text-risk-critical' : analysis.risk_level === 'high' ? 'text-risk-high' : analysis.risk_level === 'medium' ? 'text-risk-medium' : 'text-risk-low';
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-          <ArrowLeft size={16} />
-          返回
-        </Button>
-        <div>
-          <h1 className="text-h1 text-text-primary">分析详情</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-body text-text-secondary">{analysis.request_id}</span>
-            <RiskLevelBadge level={analysis.risk_level} />
-          </div>
-        </div>
-      </div>
+    <div className="space-y-5 animate-fade-in">
+      <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3"><Button variant="ghost" size="sm" onClick={()=>navigate(-1)} className="mt-1"><ArrowLeft size={16}/>返回</Button><div><div className="flex flex-wrap items-center gap-2"><h1 className="text-h1 text-text-primary">风险事件研判</h1><RiskLevelBadge level={analysis.risk_level}/></div><p className="mt-1 font-mono text-caption text-text-secondary">{analysis.request_id}</p></div></div>
+        <Button onClick={()=>navigate('/decisions')}><Scale size={16}/>进入决策队列</Button>
+      </section>
 
-      {/* Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card glass>
-          <p className="text-caption text-text-muted">风险评分</p>
-          <p className="text-h1 font-mono text-risk-high mt-1">{(analysis.risk_score * 100).toFixed(0)}</p>
-          <p className="text-caption text-text-muted mt-1">/100分</p>
-        </Card>
-        <Card glass>
-          <p className="text-caption text-text-muted">风险等级</p>
-          <p className="text-h1 mt-1"><RiskLevelBadge level={analysis.risk_level} /></p>
-        </Card>
-        <Card glass>
-          <p className="text-caption text-text-muted">异常标签</p>
-          <p className="text-h3 text-text-primary mt-1 font-mono">{analysis.anomaly_tags?.length || 0}</p>
-        </Card>
-      </div>
-
-      {/* Anomaly Tags */}
-      <Card>
-        <h3 className="text-h3 text-text-primary mb-4">异常标签</h3>
-        <div className="flex flex-wrap gap-2">
-          {analysis.anomaly_tags?.map((tag, i) => (
-            <Badge key={i} variant="high">{tag}</Badge>
-          )) || <span className="text-text-muted">无</span>}
-        </div>
-      </Card>
-
-      {/* Analysis Reasoning */}
-      <Card>
-        <h3 className="text-h3 text-text-primary mb-4">分析推理</h3>
-        <p className="text-body text-text-secondary leading-relaxed whitespace-pre-wrap">
-          {analysis.reasoning || '暂无分析推理'}
-        </p>
-      </Card>
-
-      {/* Facts Summary */}
-      {analysis.facts_summary && (
-        <Card>
-          <h3 className="text-h3 text-text-primary mb-4">关键事实摘要</h3>
-          <pre className="bg-bg-primary rounded-input p-4 text-caption text-text-primary font-mono overflow-x-auto">
-            {JSON.stringify(analysis.facts_summary, null, 2)}
-          </pre>
-        </Card>
-      )}
-
-      {/* Agent 决策追踪 */}
-      {traceLoading ? (
-        <Card>
-          <div className="flex items-center gap-2 text-text-muted">
-            <Loader2 size={16} className="animate-spin" />
-            <span className="text-body">正在加载决策追踪...</span>
-          </div>
-        </Card>
-      ) : trace ? (
-        <Card>
-          <h3 className="text-h3 text-text-primary mb-4">Agent 决策追踪</h3>
-          <div className="space-y-0">
-            {trace.steps.map((step, i) => (
-              <StepTimeline key={i} step={step} isLast={i === trace.steps.length - 1} />
-            ))}
-          </div>
-          {trace.final_decision && (
-            <div className="mt-4 pt-4 border-t border-border flex items-center gap-2">
-              <span className="text-caption text-text-muted">最终决策:</span>
-              <Badge variant={trace.final_decision === 'approve' ? 'success' : 'high'}>
-                {trace.final_decision}
-              </Badge>
-              <span className="text-caption text-text-muted">置信度: {(trace.confidence * 100).toFixed(0)}%</span>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          <Card padding="lg" className="overflow-hidden">
+            <div className="grid gap-6 sm:grid-cols-[180px_1fr] sm:items-center">
+              <div className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full" style={{background:`conic-gradient(var(--color-risk-${analysis.risk_level === 'none' ? 'low' : analysis.risk_level}) ${score * 3.6}deg, var(--color-bg-tertiary) 0)`}}><div className="flex h-32 w-32 flex-col items-center justify-center rounded-full bg-bg-secondary"><span className={`font-mono text-[42px] font-bold leading-none ${riskTone}`}>{score}</span><span className="mt-1 text-caption text-text-muted">风险评分 / 100</span></div></div>
+              <div><p className="text-caption font-semibold text-accent-blue">AI 风险研判结论</p><h2 className="mt-2 text-h2 text-text-primary">{analysis.risk_level === 'critical' ? '发现重大供应链风险，建议立即处置' : analysis.risk_level === 'high' ? '发现高风险信号，需要优先人工复核' : analysis.risk_level === 'medium' ? '存在潜在风险，建议持续观察' : '当前风险处于可控范围'}</h2><p className="mt-3 whitespace-pre-wrap text-body leading-7 text-text-secondary">{analysis.reasoning || '系统尚未生成详细推理。请结合下方事实证据完成研判。'}</p></div>
             </div>
-          )}
-        </Card>
-      ) : null}
+          </Card>
 
-      {/* 风险因子详情 */}
-      {analysis.facts_summary && (
-        <Card>
-          <h3 className="text-h3 text-text-primary mb-4">风险因子分析</h3>
-          <div className="space-y-3">
-            {Object.entries(analysis.facts_summary as Record<string, unknown>).map(([key, value]) => (
-              <div key={key} className="flex items-start gap-3 p-3 rounded-btn bg-bg-primary/50">
-                <div className="w-2 h-2 rounded-full mt-1.5 bg-accent-blue flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-body font-medium text-text-primary">{key}</p>
-                  <p className="text-caption text-text-secondary mt-0.5">
-                    {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+          <Card padding="lg">
+            <div className="mb-4 flex items-center gap-2"><FileSearch size={19} className="text-accent-blue"/><h2 className="text-h3 text-text-primary">事实证据</h2><Badge variant="default">{facts.length} 项</Badge></div>
+            {facts.length ? <div className="grid gap-3 sm:grid-cols-2">{facts.map(([key,value])=><div key={key} className="rounded-btn border border-border bg-bg-primary p-4"><p className="text-caption font-semibold text-text-secondary">{key}</p><p className="mt-2 break-words text-body text-text-primary">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</p></div>)}</div> : <p className="rounded-btn bg-bg-tertiary/40 p-4 text-caption text-text-muted">暂无结构化事实证据，请核对原始数据后再做高风险决策。</p>}
+          </Card>
+
+          <Card padding="lg">
+            <div className="mb-4 flex items-center gap-2"><GitBranch size={19} className="text-accent-purple"/><h2 className="text-h3 text-text-primary">Agent 决策链路</h2></div>
+            {traceLoading ? <div className="flex items-center gap-2 py-8 text-text-muted"><Loader2 size={16} className="animate-spin"/>正在加载决策追踪...</div> : trace ? <div>{trace.steps.map((step,index)=><StepTimeline key={`${step.step}-${index}`} step={step} isLast={index===trace.steps.length-1}/>)}<div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border pt-4"><span className="text-caption text-text-muted">最终建议</span><Badge variant={trace.final_decision === 'approve' ? 'success' : 'high'}>{trace.final_decision}</Badge><span className="text-caption text-text-muted">置信度 {Math.round(trace.confidence*100)}%</span></div></div> : <p className="rounded-btn bg-bg-tertiary/40 p-4 text-caption text-text-muted">暂无 Agent 执行链路，当前分析可能尚未进入决策阶段。</p>}
+          </Card>
+        </div>
+
+        <aside className="space-y-4">
+          <Card padding="lg"><div className="flex items-center gap-2"><ShieldAlert size={19} className={riskTone}/><h2 className="text-h3 text-text-primary">风险摘要</h2></div><dl className="mt-5 space-y-4">{[['风险等级',<RiskLevelBadge key="risk" level={analysis.risk_level} size="sm"/>],['风险评分',`${score} / 100`],['异常标签',`${analysis.anomaly_tags?.length || 0} 个`],['原始数据',analysis.raw_data_id],['分析时间',new Date(analysis.created_at).toLocaleString('zh-CN')]].map(([label,value])=><div key={String(label)} className="flex items-start justify-between gap-4 border-b border-border/70 pb-3"><dt className="text-caption text-text-muted">{label}</dt><dd className="max-w-[65%] break-all text-right text-caption font-semibold text-text-primary">{value}</dd></div>)}</dl></Card>
+          <Card padding="lg"><h2 className="text-h3 text-text-primary">异常信号</h2><div className="mt-4 flex flex-wrap gap-2">{analysis.anomaly_tags?.length ? analysis.anomaly_tags.map(tag=><Badge key={tag} variant="high">{tag}</Badge>) : <span className="text-caption text-text-muted">未发现异常标签</span>}</div></Card>
+        </aside>
+      </section>
     </div>
   );
 }
 
 function StepTimeline({ step, isLast }: { step: AgentExecutionStep; isLast: boolean }) {
-  const statusIcon = step.status === 'success' ? (
-    <CheckCircle size={16} className="text-risk-low" />
-  ) : step.status === 'error' ? (
-    <XCircle size={16} className="text-risk-critical" />
-  ) : (
-    <Clock size={16} className="text-risk-medium" />
-  );
-
-  return (
-    <div className="flex gap-3">
-      <div className="flex flex-col items-center flex-shrink-0">
-        <div className="w-6 h-6 rounded-full bg-bg-primary border border-border flex items-center justify-center">
-          {statusIcon}
-        </div>
-        {!isLast && <div className="w-0.5 flex-1 bg-border/30 my-1" />}
-      </div>
-      <div className={`flex-1 pb-4 ${isLast ? '' : ''}`}>
-        <div className="flex items-center gap-2">
-          <span className="text-body font-medium text-text-primary">{step.action}</span>
-          <Badge variant="default">{step.step}</Badge>
-        </div>
-        {step.output && (
-          <p className="text-caption text-text-secondary mt-1 line-clamp-2">{step.output}</p>
-        )}
-        <p className="text-caption text-text-muted mt-1">{step.elapsed_ms}ms</p>
-      </div>
-    </div>
-  );
+  const icon = step.status === 'success' ? <CheckCircle size={16} className="text-risk-low"/> : step.status === 'error' ? <XCircle size={16} className="text-risk-critical"/> : <Clock size={16} className="text-risk-medium"/>;
+  return <div className="flex gap-3"><div className="flex flex-col items-center"><div className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-bg-primary">{icon}</div>{!isLast && <div className="my-1 w-px flex-1 bg-border"/>}</div><div className="min-w-0 flex-1 pb-5"><div className="flex flex-wrap items-center gap-2"><p className="text-body font-semibold text-text-primary">{step.action}</p><Badge variant="default">{step.step}</Badge><span className="ml-auto text-[11px] text-text-muted">{step.elapsed_ms}ms</span></div>{step.output && <p className="mt-1 line-clamp-2 text-caption text-text-secondary">{step.output}</p>}</div></div>;
 }

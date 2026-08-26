@@ -12,13 +12,18 @@ import { RuleEditor } from '@/pages/Rules/RuleEditor';
 import { RuleVersions } from '@/pages/Rules/RuleVersions';
 import { Settings } from '@/pages/Settings/Settings';
 import { NotFound } from '@/pages/NotFound';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { useAuthStore } from '@/stores/authStore';
 
 function App() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<AppLayout />}>
+        <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/" element={<AppLayout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="raw-data" element={<RawDataList />} />
@@ -32,6 +37,7 @@ function App() {
           <Route path="settings/llm" element={<Settings />} />
           <Route path="settings/*" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>

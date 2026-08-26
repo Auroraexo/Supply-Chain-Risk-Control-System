@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Search, LayoutGrid, List } from 'lucide-react';
+import { Play, Search, LayoutGrid, List, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -8,7 +8,10 @@ import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { RiskLevelBadge } from '@/components/business/RiskLevelBadge';
+import { AutomationModal } from '@/components/business/AutomationModal';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import Empty from '@/components/Empty';
 import { useToastStore } from '@/stores/toastStore';
 import { analysisService } from '@/services/analysisService';
 import type { AnalysisResult } from '@/types/models';
@@ -16,9 +19,10 @@ import type { AnalysisResult } from '@/types/models';
 export function AnalysisList() {
   const [analyses, setAnalyses] = useState<AnalysisResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
   const [riskFilter, setRiskFilter] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  const [autoOpen, setAutoOpen] = useState(false);
   const { addToast } = useToastStore();
   const navigate = useNavigate();
 
@@ -51,24 +55,26 @@ export function AnalysisList() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-h1 text-text-primary">风险分析中心</h1>
-          <p className="text-body text-text-secondary mt-1">查看所有风险评估结果与分析详情</p>
-        </div>
-        <Button onClick={handleRunAnalysis}>
-          <Play size={16} />
-          新建分析
-        </Button>
-      </div>
+      <PageHeader eyebrow="Risk Intelligence" title="风险分析中心" description="汇总风险事件、证据与智能研判结果" actions={<>
+          <Button variant="outline" onClick={() => setAutoOpen(true)}>
+            <Sparkles size={16} />
+            AI 自动分析
+          </Button>
+          <Button onClick={handleRunAnalysis}>
+            <Play size={16} />
+            新建分析
+          </Button>
+        </>} />
+
+      <AutomationModal mode="analysis" open={autoOpen} onClose={() => setAutoOpen(false)} onDone={fetchData} />
 
       <Card padding="none">
-        <div className="flex items-center gap-3 p-4 border-b border-border">
+        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
           <Input
             placeholder="搜索请求ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
+            className="w-full sm:max-w-xs"
           />
           <Select
             options={[
@@ -112,11 +118,7 @@ export function AnalysisList() {
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="p-12 text-center text-text-muted">
-            <Search size={32} className="mx-auto mb-3 opacity-40" />
-            <p className="text-body">暂无分析结果</p>
-            <p className="text-caption mt-1">点击"新建分析"创建第一个分析任务</p>
-          </div>
+          <Empty title={search || riskFilter ? '未找到匹配的分析结果' : '暂无分析结果'} description={search || riskFilter ? '尝试调整搜索词或风险等级。' : '接入数据后启动第一个风险分析任务。'} icon={<Search size={24}/>} action={!search && !riskFilter ? <Button size="sm" onClick={handleRunAnalysis}><Play size={15}/>新建分析</Button> : undefined}/>
         ) : viewMode === 'card' ? (
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
             {filtered.map((analysis) => (

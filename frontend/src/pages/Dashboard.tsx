@@ -1,381 +1,148 @@
-import { useState, useEffect } from 'react';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { RiskLevelBadge } from '@/components/business/RiskLevelBadge';
-import { Skeleton } from '@/components/ui/Skeleton';
-import { CountUp } from '@/components/ui/CountUp';
-import { RingProgress } from '@/components/ui/RingProgress';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle, TrendingUp, Clock, GitBranch, Shield, ArrowRight, Activity, Scale,
+  Activity, AlertTriangle, ArrowRight, Clock3, Database, GitBranch,
+  RefreshCw, Scale, ShieldAlert, Sparkles, TrendingUp,
 } from 'lucide-react';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { StatePanel } from '@/components/ui/StatePanel';
+import Empty from '@/components/Empty';
 import { dashboardService } from '@/services/dashboardService';
-import type { DashboardSummary, RiskTrendPoint, AlertItem } from '@/types/models';
+import type { AlertItem, DashboardSummary, RiskTrendPoint } from '@/types/models';
 
-/** 风险等级对应的主题色（与 tailwind.config.js 中 risk-* token 保持一致） */
-const RISK_COLORS = {
-  critical: '#EF4444', // risk-critical
-  high: '#F97316', // risk-high
-  medium: '#F59E0B', // risk-medium
-  low: '#10B981', // risk-low
-} as const;
+const riskColors = { critical: '#dc2626', high: '#ea580c', medium: '#d97706', low: '#059669' };
 
-function StatCard({
-  label,
-  value,
-  icon,
-  accent,
-  trend,
-}: {
-  label: string;
-  value: number | string;
-  icon: React.ReactNode;
-  accent: string;
-  trend?: string;
+function MetricCard({ label, value, note, icon, tone = 'blue' }: {
+  label: string; value: number; note: string; icon: React.ReactNode; tone?: 'blue' | 'red' | 'amber' | 'violet';
 }) {
+  const tones = {
+    blue: 'bg-accent-blue/10 text-accent-blue', red: 'bg-risk-critical/10 text-risk-critical',
+    amber: 'bg-risk-medium/10 text-risk-medium', violet: 'bg-accent-purple/10 text-accent-purple',
+  };
   return (
-    <Card hover glass className="relative overflow-hidden group">
-      <div className="absolute top-0 right-0 w-24 h-24 opacity-5 group-hover:opacity-10 transition-opacity" style={{ background: accent }}>
-        <div className="w-full h-full rounded-full transform translate-x-1/2 -translate-y-1/2" style={{ background: `radial-gradient(circle, ${accent}, transparent)` }} />
-      </div>
-      <div className="flex items-start justify-between">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}20` }}>
-              {icon}
-            </div>
-            <span className="text-caption text-text-muted">{label}</span>
-          </div>
-          <p className="text-display font-mono text-text-primary tabular-nums">
-            {typeof value === 'number' ? <CountUp end={value} duration={1000} /> : value}
-          </p>
-          {trend && <p className="text-caption text-text-muted">{trend}</p>}
+    <Card className="relative overflow-hidden">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-caption font-medium text-text-secondary">{label}</p>
+          <p className="mt-2 font-mono text-[32px] font-bold leading-none tabular-nums text-text-primary">{value}</p>
+          <p className="mt-3 text-caption text-text-muted">{note}</p>
         </div>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tones[tone]}`}>{icon}</div>
       </div>
     </Card>
   );
 }
 
-function AlertTimeline({ alerts }: { alerts: AlertItem[] }) {
-  return (
-    <div className="space-y-0">
-      {alerts.map((alert, i) => (
-        <div key={alert.id} className="flex gap-3 py-3 border-b border-border/30 last:border-b-0 animate-fade-in" style={{ animationDelay: `${i * 80}ms` }}>
-          <div className="relative flex-shrink-0">
-            <div className="w-2.5 h-2.5 rounded-full mt-1.5" style={{
-              backgroundColor: RISK_COLORS[alert.type] ?? RISK_COLORS.low,
-            }} />
-            {i < alerts.length - 1 && <div className="absolute top-4 left-1 w-0.5 h-full bg-border/30" />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-body font-medium text-text-primary">{alert.title}</p>
-            <p className="text-caption text-text-secondary mt-0.5 line-clamp-1">{alert.description}</p>
-            <p className="text-caption text-text-muted mt-1">{new Date(alert.created_at).toLocaleString('zh-CN')}</p>
-          </div>
-          <RiskLevelBadge level={alert.type} size="sm" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TrendChart({ data }: { data: RiskTrendPoint[] }) {
-  if (data.length === 0) return <div className="h-48 flex items-center justify-center text-text-muted">暂无趋势数据</div>;
-
-  const chartData = data.map((point) => ({
-    date: point.date.slice(5),
-    critical: point.critical,
-    high: point.high,
-    medium: point.medium,
-    low: point.low,
-  }));
-
-  return (
-    <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-        <defs>
-          <linearGradient id="criticalGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={RISK_COLORS.critical} stopOpacity={0.3} />
-            <stop offset="95%" stopColor={RISK_COLORS.critical} stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="highGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={RISK_COLORS.high} stopOpacity={0.3} />
-            <stop offset="95%" stopColor={RISK_COLORS.high} stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="mediumGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={RISK_COLORS.medium} stopOpacity={0.3} />
-            <stop offset="95%" stopColor={RISK_COLORS.medium} stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="lowGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={RISK_COLORS.low} stopOpacity={0.3} />
-            <stop offset="95%" stopColor={RISK_COLORS.low} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-        <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: '#1F2937',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '8px',
-            fontSize: '12px',
-            color: '#F9FAFB',
-          }}
-        />
-        <Legend
-          wrapperStyle={{ fontSize: '12px', color: '#9CA3AF' }}
-          iconType="circle"
-          iconSize={8}
-        />
-        <Area type="monotone" dataKey="critical" stroke={RISK_COLORS.critical} fill="url(#criticalGrad)" strokeWidth={2} name="严重" />
-        <Area type="monotone" dataKey="high" stroke={RISK_COLORS.high} fill="url(#highGrad)" strokeWidth={2} name="高风险" />
-        <Area type="monotone" dataKey="medium" stroke={RISK_COLORS.medium} fill="url(#mediumGrad)" strokeWidth={2} name="中风险" />
-        <Area type="monotone" dataKey="low" stroke={RISK_COLORS.low} fill="url(#lowGrad)" strokeWidth={2} name="低风险" />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
+function DashboardSkeleton() {
+  return <div className="space-y-5">
+    <Skeleton className="h-20 w-full" />
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[1,2,3,4].map(i => <Skeleton key={i} className="h-36 w-full" />)}</div>
+    <div className="grid gap-4 xl:grid-cols-3"><Skeleton className="h-80 w-full xl:col-span-2" /><Skeleton className="h-80 w-full" /></div>
+  </div>;
 }
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [trends, setTrends] = useState<RiskTrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState({ summary: false, alerts: false, trends: false });
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [summaryRes, alertsRes, trendsRes] = await Promise.all([
-          dashboardService.getSummary(),
-          dashboardService.getAlerts(10),
-          dashboardService.getTrends(30),
-        ]);
-        setSummary(summaryRes.data);
-        setAlerts(alertsRes.data);
-        setTrends(trendsRes.data);
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const [summaryResult, alertResult, trendResult] = await Promise.allSettled([
+      dashboardService.getSummary(), dashboardService.getAlerts(8), dashboardService.getTrends(30),
+    ]);
+    if (summaryResult.status === 'fulfilled') setSummary(summaryResult.value.data);
+    else setSummary(null);
+    if (alertResult.status === 'fulfilled') setAlerts(alertResult.value.data || []);
+    else setAlerts([]);
+    if (trendResult.status === 'fulfilled') setTrends(trendResult.value.data || []);
+    else setTrends([]);
+    setErrors({
+      summary: summaryResult.status === 'rejected',
+      alerts: alertResult.status === 'rejected',
+      trends: trendResult.status === 'rejected',
+    });
+    setLoading(false);
   }, []);
 
-  if (loading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-8 w-32" />
-            <Skeleton className="h-4 w-48 mt-2" />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} glass>
-              <Skeleton className="h-4 w-20 mb-3" />
-              <Skeleton className="h-8 w-16" />
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => { void fetchData(); }, [fetchData]);
+  if (loading) return <DashboardSkeleton />;
 
-  const defaultSummary: DashboardSummary = {
-    total_risks: 0,
-    critical_count: 0,
-    high_count: 0,
-    medium_count: 0,
-    low_count: 0,
-    pending_decisions: 0,
-    active_rules: 0,
-    last_updated: new Date().toISOString(),
-  };
-
-  const displaySummary = summary || defaultSummary;
+  const degraded = errors.summary || errors.alerts || errors.trends;
+  const highPriority = summary ? summary.critical_count + summary.high_count : 0;
+  const updatedAt = summary?.last_updated ? new Date(summary.last_updated).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '暂无';
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 animate-fade-in">
+      <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-h1 text-text-primary">风险总览</h1>
-          <p className="text-body text-text-secondary mt-1">供应链风险实时监控与分析</p>
+          <div className="mb-2 flex items-center gap-2 text-caption font-semibold text-accent-blue"><Activity size={14} />风险态势中心</div>
+          <h1 className="text-h1 text-text-primary">供应链风险态势</h1>
+          <p className="mt-1 text-body text-text-secondary">聚焦需要立即研判和处置的风险事件</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-input bg-risk-low/10 border border-risk-low/20">
-            <span className="w-2 h-2 rounded-full bg-risk-low animate-pulse-dot" />
-            <span className="text-caption text-risk-low font-medium">系统运行中</span>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={degraded ? 'high' : 'success'} dot>{degraded ? '部分数据不可用' : '数据服务正常'}</Badge>
+          <span className="text-caption text-text-muted">更新于 {updatedAt}</span>
+          <Button variant="outline" size="sm" onClick={fetchData}><RefreshCw size={14} />刷新</Button>
         </div>
-      </div>
+      </section>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="总风险数"
-          value={displaySummary.total_risks}
-          icon={<AlertTriangle size={16} className="text-accent-cyan" />}
-          accent="#06B6D4"
-          trend={`上次更新: ${displaySummary.last_updated ? new Date(displaySummary.last_updated).toLocaleDateString('zh-CN') : '暂无'}`}
-        />
-        <StatCard
-          label="严重/高风险"
-          value={`${displaySummary.critical_count + displaySummary.high_count}`}
-          icon={<TrendingUp size={16} className="text-risk-critical" />}
-          accent="#EF4444"
-          trend={`严重 ${displaySummary.critical_count} · 高 ${displaySummary.high_count}`}
-        />
-        <StatCard
-          label="待处理决策"
-          value={displaySummary.pending_decisions}
-          icon={<Clock size={16} className="text-risk-medium" />}
-          accent="#F59E0B"
-        />
-        <StatCard
-          label="活跃规则"
-          value={displaySummary.active_rules}
-          icon={<GitBranch size={16} className="text-accent-purple" />}
-          accent="#8B5CF6"
-        />
-      </div>
-
-      {/* Risk Level Rings */}
-      {displaySummary.total_risks > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Card hover className="flex flex-col items-center py-5">
-            <div className="relative inline-flex">
-              <RingProgress
-                value={displaySummary.critical_count}
-                max={displaySummary.total_risks}
-                color={RISK_COLORS.critical}
-                size={72}
-                strokeWidth={5}
-              />
-            </div>
-            <span className="text-caption text-text-muted mt-2">严重</span>
-            <span className="text-body font-bold text-risk-critical">{displaySummary.critical_count}</span>
-          </Card>
-          <Card hover className="flex flex-col items-center py-5">
-            <div className="relative inline-flex">
-              <RingProgress
-                value={displaySummary.high_count}
-                max={displaySummary.total_risks}
-                color={RISK_COLORS.high}
-                size={72}
-                strokeWidth={5}
-              />
-            </div>
-            <span className="text-caption text-text-muted mt-2">高风险</span>
-            <span className="text-body font-bold text-risk-high">{displaySummary.high_count}</span>
-          </Card>
-          <Card hover className="flex flex-col items-center py-5">
-            <div className="relative inline-flex">
-              <RingProgress
-                value={displaySummary.medium_count}
-                max={displaySummary.total_risks}
-                color={RISK_COLORS.medium}
-                size={72}
-                strokeWidth={5}
-              />
-            </div>
-            <span className="text-caption text-text-muted mt-2">中风险</span>
-            <span className="text-body font-bold text-risk-medium">{displaySummary.medium_count}</span>
-          </Card>
-          <Card hover className="flex flex-col items-center py-5">
-            <div className="relative inline-flex">
-              <RingProgress
-                value={displaySummary.low_count}
-                max={displaySummary.total_risks}
-                color={RISK_COLORS.low}
-                size={72}
-                strokeWidth={5}
-              />
-            </div>
-            <span className="text-caption text-text-muted mt-2">低风险</span>
-            <span className="text-body font-bold text-risk-low">{displaySummary.low_count}</span>
-          </Card>
-        </div>
+      {errors.summary ? (
+        <StatePanel title="风险态势暂时不可用" description="无法获取核心指标。为避免误判，系统不会用零值代替真实风险数据。" onRetry={fetchData} />
+      ) : summary && (
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="风险事件总量" value={summary.total_risks} note={`其中中低风险 ${summary.medium_count + summary.low_count} 项`} icon={<ShieldAlert size={20}/>} />
+          <MetricCard label="重大与高风险" value={highPriority} note={`重大 ${summary.critical_count} · 高风险 ${summary.high_count}`} icon={<TrendingUp size={20}/>} tone="red" />
+          <MetricCard label="待审批决策" value={summary.pending_decisions} note="需要决策人完成研判" icon={<Clock3 size={20}/>} tone="amber" />
+          <MetricCard label="生效风险规则" value={summary.active_rules} note="覆盖当前自动识别策略" icon={<GitBranch size={20}/>} tone="violet" />
+        </section>
       )}
 
-      {/* Trend & Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2" glass>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-h3 text-text-primary">风险趋势</h3>
-            <div className="flex items-center gap-3">
-              {[
-                { color: 'bg-risk-critical', label: '严重' },
-                { color: 'bg-risk-high', label: '高' },
-                { color: 'bg-risk-medium', label: '中' },
-                { color: 'bg-risk-low', label: '低' },
-              ].map(({ color, label }) => (
-                <div key={label} className="flex items-center gap-1">
-                  <span className={`w-2.5 h-2.5 rounded-sm ${color}`} />
-                  <span className="text-caption text-text-muted">{label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <TrendChart data={trends} />
+      {summary && summary.total_risks === 0 && !errors.summary ? (
+        <Card>
+          <Empty title="当前尚未发现风险事件" description="接入或录入供应链数据后，系统会在这里展示风险态势与处置建议。" icon={<Database size={24}/>} action={<Button onClick={() => navigate('/raw-data')}>接入数据源<ArrowRight size={15}/></Button>} />
         </Card>
+      ) : (
+        <section className="grid gap-4 xl:grid-cols-3">
+          <Card className="xl:col-span-2" padding="lg">
+            <div className="mb-5 flex items-center justify-between">
+              <div><h2 className="text-h3 text-text-primary">30 天风险趋势</h2><p className="mt-1 text-caption text-text-muted">按风险等级观察事件变化</p></div>
+              <Badge variant="default">近 30 天</Badge>
+            </div>
+            {errors.trends ? <StatePanel compact title="趋势数据加载失败" description="核心指标不受影响，可单独重试趋势数据。" onRetry={fetchData} /> : trends.length === 0 ? <Empty compact title="暂无趋势数据" description="产生分析结果后将自动形成趋势。" /> : (
+              <div className="h-64"><ResponsiveContainer width="100%" height="100%"><AreaChart data={trends} margin={{top:8,right:8,left:-24,bottom:0}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false}/><XAxis dataKey="date" stroke="var(--color-text-muted)" fontSize={11}/><YAxis stroke="var(--color-text-muted)" fontSize={11}/><Tooltip/><Area type="monotone" dataKey="critical" stroke={riskColors.critical} fill={riskColors.critical} fillOpacity={0.08} strokeWidth={2}/><Area type="monotone" dataKey="high" stroke={riskColors.high} fill={riskColors.high} fillOpacity={0.06} strokeWidth={2}/>
+              </AreaChart></ResponsiveContainer></div>
+            )}
+          </Card>
 
-        <Card glass>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-h3 text-text-primary">最近告警</h3>
-            <Badge variant="info" dot>
-              <Activity size={12} />
-              <span>实时</span>
-            </Badge>
-          </div>
-          <AlertTimeline alerts={alerts} />
-        </Card>
-      </div>
+          <Card padding="lg">
+            <div className="mb-5 flex items-center justify-between"><div><h2 className="text-h3 text-text-primary">重大风险队列</h2><p className="mt-1 text-caption text-text-muted">优先处理最新告警</p></div><Button variant="ghost" size="sm" onClick={() => navigate('/analysis')}>全部<ArrowRight size={14}/></Button></div>
+            {errors.alerts ? <StatePanel compact title="告警数据加载失败" description="暂时无法确认最新风险事件。" onRetry={fetchData}/> : alerts.length === 0 ? <Empty compact title="暂无风险告警" description="新告警会按照严重程度出现在这里。" /> : <div className="space-y-2">
+              {alerts.slice(0,5).map(alert => <button key={alert.id} onClick={() => navigate(`/analysis/${alert.id}`)} className="w-full rounded-btn border border-border/70 p-3 text-left transition-colors hover:border-accent-blue/40 hover:bg-bg-tertiary/30">
+                <div className="flex items-start gap-3"><span className={`mt-1 h-2 w-2 flex-none rounded-full ${alert.type === 'critical' ? 'bg-risk-critical' : alert.type === 'high' ? 'bg-risk-high' : 'bg-risk-medium'}`}/><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="truncate text-body font-semibold text-text-primary">{alert.title}</p><span className="whitespace-nowrap text-[11px] text-text-muted">{new Date(alert.created_at).toLocaleDateString('zh-CN')}</span></div><p className="mt-1 line-clamp-2 text-caption text-text-secondary">{alert.description}</p></div></div>
+              </button>)}
+            </div>}
+          </Card>
+        </section>
+      )}
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card hover className="group cursor-pointer border-accent-blue/20 hover:border-accent-blue/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-accent-blue/10 flex items-center justify-center group-hover:bg-accent-blue/20 transition-colors">
-              <Shield size={20} className="text-accent-blue" />
-            </div>
-            <div className="flex-1">
-              <p className="text-body font-medium text-text-primary">创建分析任务</p>
-              <p className="text-caption text-text-muted">提交数据进行风险评估</p>
-            </div>
-            <ArrowRight size={18} className="text-text-muted group-hover:text-accent-blue transition-colors" />
-          </div>
-        </Card>
-        <Card hover className="group cursor-pointer border-accent-purple/20 hover:border-accent-purple/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-accent-purple/10 flex items-center justify-center group-hover:bg-accent-purple/20 transition-colors">
-              <Scale size={20} className="text-accent-purple" />
-            </div>
-            <div className="flex-1">
-              <p className="text-body font-medium text-text-primary">查看待处理决策</p>
-              <p className="text-caption text-text-muted">审批待决策的风险项</p>
-            </div>
-            <ArrowRight size={18} className="text-text-muted group-hover:text-accent-purple transition-colors" />
-          </div>
-        </Card>
-        <Card hover className="group cursor-pointer border-accent-cyan/20 hover:border-accent-cyan/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-accent-cyan/10 flex items-center justify-center group-hover:bg-accent-cyan/20 transition-colors">
-              <GitBranch size={20} className="text-accent-cyan" />
-            </div>
-            <div className="flex-1">
-              <p className="text-body font-medium text-text-primary">管理规则引擎</p>
-              <p className="text-caption text-text-muted">配置决策规则与策略</p>
-            </div>
-            <ArrowRight size={18} className="text-text-muted group-hover:text-accent-cyan transition-colors" />
-          </div>
-        </Card>
-      </div>
+      <section>
+        <div className="mb-3 flex items-end justify-between"><div><h2 className="text-h3 text-text-primary">快速开始</h2><p className="mt-1 text-caption text-text-muted">从数据到决策的核心工作流</p></div></div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[{title:'录入风险数据',desc:'接入供应商、库存或物流信息',path:'/raw-data',icon:<Database size={19}/>,color:'text-accent-blue bg-accent-blue/10'},{title:'启动 AI 风险分析',desc:'识别异常并生成风险证据',path:'/analysis',icon:<Sparkles size={19}/>,color:'text-accent-purple bg-accent-purple/10'},{title:'处理待审批决策',desc:'查看建议、依据与处置动作',path:'/decisions',icon:<Scale size={19}/>,color:'text-risk-medium bg-risk-medium/10'}].map(item => <button key={item.path} onClick={() => navigate(item.path)} className="group flex items-center gap-3 rounded-card border border-border bg-bg-secondary p-4 text-left transition-colors hover:border-accent-blue/40 hover:bg-bg-tertiary/20"><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${item.color}`}>{item.icon}</span><span className="min-w-0 flex-1"><span className="block text-body font-semibold text-text-primary">{item.title}</span><span className="mt-0.5 block text-caption text-text-muted">{item.desc}</span></span><ArrowRight size={16} className="text-text-muted transition-transform group-hover:translate-x-1 group-hover:text-accent-blue"/></button>)}
+        </div>
+      </section>
+      {degraded && <div className="flex items-center gap-2 text-caption text-risk-high"><AlertTriangle size={14}/>部分模块未加载完成，请以模块内错误状态为准。</div>}
     </div>
   );
 }

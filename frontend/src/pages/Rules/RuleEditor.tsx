@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
-import { ChevronRight, ChevronDown, Plus, ToggleLeft, ToggleRight, Edit3, Trash2, Save, Loader2, GripVertical, Play, Copy, EyeOff } from 'lucide-react';
+import { AutomationModal } from '@/components/business/AutomationModal';
+import { ChevronRight, ChevronDown, Plus, ToggleLeft, ToggleRight, Edit3, Trash2, Save, Loader2, GripVertical, Play, Copy, EyeOff, Sparkles } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { ruleService } from '@/services/ruleService';
 import { ContextMenu } from '@/components/ui/ContextMenu';
@@ -237,6 +238,7 @@ export function RuleEditor() {
   const [testRunning, setTestRunning] = useState(false);
   const [form, setForm] = useState<AddNodeForm>({ ...formDefaults });
   const [submitting, setSubmitting] = useState(false);
+  const [autoOpen, setAutoOpen] = useState(false);
   const { addToast } = useToastStore();
 
   const sensors = useSensors(
@@ -470,6 +472,10 @@ export function RuleEditor() {
           <p className="text-body text-text-secondary mt-1">可视化编辑决策规则树</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setAutoOpen(true)}>
+            <Sparkles size={16} />
+            AI 规则优化
+          </Button>
           <Button variant="outline" size="sm" onClick={handleOpenModal}>
             <Plus size={16} />
             添加节点
@@ -484,6 +490,8 @@ export function RuleEditor() {
           </Button>
         </div>
       </div>
+
+      <AutomationModal mode="rules" open={autoOpen} onClose={() => setAutoOpen(false)} onDone={fetchTree} />
 
       <Card padding="none">
         <div className="p-4 border-b border-border">

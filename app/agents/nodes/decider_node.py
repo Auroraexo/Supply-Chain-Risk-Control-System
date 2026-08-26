@@ -134,7 +134,7 @@ async def decider_node(state: AgentState) -> AgentState:
         "decider.exit",
         request_id=request_id,
         status=state.get("status", DecisionStatus.PENDING),
-        decision=state.get("decision_result", {}).get("action"),
+        decision=(state.get("decision_result") or {}).get("action"),
         confidence=state.get("confidence"),
         elapsed_ms=total_elapsed,
     )
@@ -153,12 +153,19 @@ async def _resolve_decision(
     返回 (decision, confidence, path, source)。
     """
     # 尝试规则引擎
+    t_rule = time.monotonic()
     try:
         rule_decision = await _decision_from_rule_engine(
             request_id=request_id,
             risk_score=risk_score,
             risk_level=risk_level,
             facts=facts,
+        )
+        logger.info(
+            "decider.rule_engine_resolved",
+            request_id=request_id,
+            matched=rule_decision is not None,
+            elapsed_ms=round((time.monotonic() - t_rule) * 1000, 1),
         )
         if rule_decision is not None:
             return rule_decision
@@ -170,6 +177,7 @@ async def _resolve_decision(
         )
 
     # 矩阵兜底
+    t_matrix = time.monotonic()
     decision = None
     confidence = None
     for threshold, dec, conf in DECISION_MATRIX:
@@ -182,6 +190,14 @@ async def _resolve_decision(
         confidence = 0.90
 
     path = ["root", "risk_assessment", decision]
+    logger.info(
+        "decider.matrix_fallback",
+        request_id=request_id,
+        decision=decision,
+        confidence=confidence,
+        risk_score=risk_score,
+        elapsed_ms=round((time.monotonic() - t_matrix) * 1000, 1),
+    )
     return decision, confidence, path, "matrix"
 
 
@@ -275,8 +291,15 @@ async def _generate_explanation(
             ("system", system_prompt),
             ("human", user_msg),
         ]
+        t_llm = time.monotonic()
         resp = await llm.ainvoke(messages)
         content = getattr(resp, "content", "")
+        logger.info(
+            "decider.explanation_llm",
+            request_id=request_id,
+            elapsed_ms=round((time.monotonic() - t_llm) * 1000, 1),
+            content_length=len(str(content)) if content else 0,
+        )
         if content and str(content).strip():
             return str(content).strip()
     except Exception as e:

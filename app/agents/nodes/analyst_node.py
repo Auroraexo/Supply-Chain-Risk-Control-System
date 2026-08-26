@@ -234,8 +234,15 @@ async def _generate_reasoning(
             ("system", system_prompt),
             ("human", user_msg),
         ]
+        t_llm = time.monotonic()
         resp = await llm.ainvoke(messages)
         content = getattr(resp, "content", "")
+        logger.info(
+            "analyst.reasoning_llm",
+            request_id=request_id,
+            elapsed_ms=round((time.monotonic() - t_llm) * 1000, 1),
+            content_length=len(str(content)) if content else 0,
+        )
         if content and str(content).strip():
             return str(content).strip()
     except Exception as e:

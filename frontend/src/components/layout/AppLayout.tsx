@@ -23,7 +23,7 @@ export function AppLayout() {
         )}
       >
         <Header />
-        <main className="p-4 lg:p-6 max-w-[1400px] mx-auto">
+        <main className="mx-auto w-full max-w-[1600px] p-4 sm:p-5 lg:p-7">
           <ErrorBoundary>
             <PageTransition>
               <Outlet />

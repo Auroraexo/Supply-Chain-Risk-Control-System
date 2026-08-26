@@ -8,30 +8,30 @@ export default {
     extend: {
       colors: {
         bg: {
-          primary: '#0F172A',
-          secondary: '#1E293B',
-          tertiary: '#334155',
+          primary: 'var(--color-bg-primary)',
+          secondary: 'var(--color-bg-secondary)',
+          tertiary: 'var(--color-bg-tertiary)',
         },
         accent: {
-          blue: '#3B82F6',
-          purple: '#8B5CF6',
-          cyan: '#06B6D4',
+          blue: 'var(--color-accent-blue)',
+          purple: 'var(--color-accent-purple)',
+          cyan: 'var(--color-accent-cyan)',
         },
         risk: {
-          critical: '#EF4444',
-          high: '#F97316',
-          medium: '#F59E0B',
-          low: '#10B981',
-          none: '#6B7280',
+          critical: 'var(--color-risk-critical)',
+          high: 'var(--color-risk-high)',
+          medium: 'var(--color-risk-medium)',
+          low: 'var(--color-risk-low)',
+          none: 'var(--color-risk-none)',
         },
         text: {
-          primary: '#F1F5F9',
-          secondary: '#94A3B8',
-          muted: '#64748B',
+          primary: 'var(--color-text-primary)',
+          secondary: 'var(--color-text-secondary)',
+          muted: 'var(--color-text-muted)',
         },
         border: {
-          DEFAULT: '#334155',
-          light: '#475569',
+          DEFAULT: 'var(--color-border)',
+          light: 'var(--color-border-light)',
         },
       },
       fontFamily: {
@@ -39,12 +39,12 @@ export default {
         sans: ['Noto Sans SC', 'system-ui', 'sans-serif'],
       },
       fontSize: {
-        'display': ['36px', { lineHeight: '1.2', fontWeight: '700' }],
-        'h1': ['28px', { lineHeight: '1.2', fontWeight: '700' }],
+        'display': ['36px', { lineHeight: '1.15', fontWeight: '700' }],
+        'h1': ['28px', { lineHeight: '1.25', fontWeight: '700' }],
         'h2': ['22px', { lineHeight: '1.2', fontWeight: '600' }],
         'h3': ['18px', { lineHeight: '1.3', fontWeight: '600' }],
         'body': ['14px', { lineHeight: '1.6' }],
-        'caption': ['12px', { lineHeight: '1.5' }],
+        'caption': ['13px', { lineHeight: '1.5' }],
       },
       borderRadius: {
         'card': '12px',
@@ -52,8 +52,8 @@ export default {
         'input': '6px',
       },
       boxShadow: {
-        'card': '0 1px 3px rgba(0, 0, 0, 0.4)',
-        'card-hover': '0 4px 16px rgba(59, 130, 246, 0.15)',
+        'card': 'var(--shadow-card)',
+        'card-hover': 'var(--shadow-card-hover)',
         'glow-blue': '0 0 12px rgba(59, 130, 246, 0.3)',
         'glow-red': '0 0 12px rgba(239, 68, 68, 0.3)',
       },

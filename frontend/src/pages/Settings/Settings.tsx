@@ -103,7 +103,7 @@ export function LLMConfig() {
       } else {
         addToast({ type: 'error', title: '连接测试失败', message: res.data?.message || '未知错误' });
       }
-    } catch (e) {
+    } catch {
       addToast({ type: 'error', title: '测试失败', message: '无法连接到LLM服务' });
     } finally {
       setTesting(false);

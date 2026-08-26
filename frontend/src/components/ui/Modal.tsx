@@ -38,11 +38,11 @@ export function Modal({ open, onClose, title, size = 'md', children }: ModalProp
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center">
+    <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
         className={clsx(
-          'relative w-full mx-4 rounded-card bg-bg-secondary border border-border shadow-2xl',
+          'relative max-h-[92vh] w-full overflow-y-auto rounded-t-card bg-bg-secondary border border-border shadow-2xl sm:mx-4 sm:rounded-card',
           'animate-slide-up',
           sizeStyles[size]
         )}

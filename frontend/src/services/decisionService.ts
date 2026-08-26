@@ -5,6 +5,7 @@ import type { PaginatedData, PaginationParams } from '@/types/api';
 export const decisionService = {
   list: (params?: PaginationParams) => get<PaginatedData<DecisionResult>>('/decision', params as Record<string, unknown>),
   getById: (requestId: string) => get<DecisionResult>(`/decision/${requestId}`),
-  approve: (requestId: string, comment?: string) => post<DecisionResult>(`/review/${requestId}/approve`, { comment }),
-  reject: (requestId: string, comment: string) => post<DecisionResult>(`/review/${requestId}/reject`, { comment }),
+  approve: (requestId: string, comment?: string) => post<DecisionResult>(`/review/${requestId}/approve`, { action: 'approve', comment }),
+  reject: (requestId: string, comment: string) => post<DecisionResult>(`/review/${requestId}/reject`, { action: 'reject', comment }),
+  escalate: (requestId: string, comment: string) => post<DecisionResult>(`/review/${requestId}/override`, { action: 'override', comment, override_decision: 'escalate' }),
 };

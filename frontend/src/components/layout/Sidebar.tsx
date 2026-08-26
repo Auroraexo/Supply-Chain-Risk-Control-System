@@ -16,11 +16,11 @@ interface NavItem {
 }
 
 const mainNav: NavItem[] = [
-  { label: '仪表盘', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
-  { label: '原始数据', icon: <Database size={20} />, path: '/raw-data' },
+  { label: '风险态势', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
   { label: '风险分析', icon: <Search size={20} />, path: '/analysis' },
-  { label: '决策管理', icon: <Scale size={20} />, path: '/decisions' },
-  { label: '规则引擎', icon: <GitBranch size={20} />, path: '/rules', roles: ['admin', 'decider'] },
+  { label: '决策审批', icon: <Scale size={20} />, path: '/decisions' },
+  { label: '数据中心', icon: <Database size={20} />, path: '/raw-data' },
+  { label: '规则策略', icon: <GitBranch size={20} />, path: '/rules', roles: ['admin', 'decider'] },
 ];
 
 const bottomNav: NavItem[] = [
@@ -50,7 +50,7 @@ const NavButton = memo(function NavButton({
       className={clsx(
         'w-full flex items-center gap-3 px-3 py-2.5 rounded-btn transition-all duration-200 select-none',
         active
-          ? 'bg-accent-blue/15 text-accent-blue shadow-glow-blue'
+          ? 'bg-accent-blue text-white shadow-sm'
           : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary',
         disabled && 'opacity-40 cursor-not-allowed',
         collapsed && 'justify-center'
@@ -67,12 +67,10 @@ const SidebarContent = memo(function SidebarContent({
   collapsed,
   isMobile,
   onNavClick,
-  onCloseMobile,
 }: {
   collapsed: boolean;
   isMobile: boolean;
   onNavClick: (item: NavItem) => void;
-  onCloseMobile: () => void;
 }) {
   const { user, logout } = useAuthStore();
   const location = useLocation();
@@ -105,11 +103,11 @@ const SidebarContent = memo(function SidebarContent({
       onClick={isMobile ? (e) => e.stopPropagation() : undefined}
     >
       {/* Logo */}
-      <div className={clsx('flex items-center gap-2 px-4 py-5 border-b border-border', collapsed && 'justify-center')}>
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center flex-shrink-0">
+      <div className={clsx('flex h-16 items-center gap-2 border-b border-border px-4', collapsed && 'justify-center')}>
+        <div className="w-8 h-8 rounded-lg bg-accent-blue flex items-center justify-center flex-shrink-0">
           <Shield size={18} className="text-white" />
         </div>
-        {!collapsed && <span className="text-h3 font-semibold text-text-primary whitespace-nowrap">SCRS</span>}
+        {!collapsed && <div className="min-w-0"><span className="block text-body font-bold text-text-primary whitespace-nowrap">风险控制中心</span><span className="block text-[10px] tracking-widest text-text-muted">SCRS</span></div>}
       </div>
 
       {/* Main Navigation */}
@@ -184,7 +182,7 @@ export function Sidebar() {
       {/* Desktop Sidebar */}
       <aside
         className={clsx(
-          'hidden lg:flex flex-col fixed top-0 left-0 h-screen bg-bg-secondary border-r border-border z-30',
+          'hidden lg:flex flex-col fixed top-0 left-0 h-screen bg-bg-secondary border-r border-border z-30 shadow-card',
           'transition-all duration-300 will-change-[width]',
           collapsed ? 'w-16' : 'w-60'
         )}
@@ -193,7 +191,6 @@ export function Sidebar() {
           collapsed={collapsed}
           isMobile={false}
           onNavClick={handleNavClick}
-          onCloseMobile={handleCloseMobile}
         />
         {/* Collapse Toggle (Desktop) */}
         <div className="px-2 pb-3 mt-auto">
@@ -224,7 +221,6 @@ export function Sidebar() {
               collapsed={false}
               isMobile={true}
               onNavClick={handleNavClick}
-              onCloseMobile={handleCloseMobile}
             />
           </aside>
         </div>

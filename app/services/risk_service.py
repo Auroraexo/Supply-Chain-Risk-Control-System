@@ -44,6 +44,7 @@ class RiskService:
         """
         flow_start = time.monotonic()
         request_id = str(uuid.uuid4())
+        stage_ms: dict[str, float] = {}
 
         logger.info(
             "risk_service.analyze_start",
@@ -82,18 +83,33 @@ class RiskService:
             data_status=raw_data.status.value,
             elapsed_ms=round((time.monotonic() - t0) * 1000, 1),
         )
+        stage_ms["validate_data"] = round((time.monotonic() - t0) * 1000, 1)
 
         # ── 阶段 2：解析原始数据载荷 ──
+        t_parse = time.monotonic()
         raw_data_payload = {}
         if raw_data.payload:
             try:
                 raw_data_payload = json.loads(raw_data.payload) if isinstance(raw_data.payload, str) else raw_data.payload
             except (json.JSONDecodeError, TypeError):
                 raw_data_payload = {"raw": str(raw_data.payload)[:500]}
+        stage_ms["parse_payload"] = round((time.monotonic() - t_parse) * 1000, 1)
+        logger.info(
+            "risk_service.payload_parsed",
+            request_id=request_id,
+            payload_keys=list(raw_data_payload.keys()),
+            elapsed_ms=stage_ms["parse_payload"],
+        )
 
         # ── 阶段 3：调用 Agent 决策流程 ──
         t1 = time.monotonic()
         from app.agents.graphs.decision_graph import run_decision_flow
+
+        # Agent 流程包含多次 LLM 推理，耗时可能达数分钟；
+        # 先结束挂起的只读事务释放数据库连接，避免连接长时间空闲被 MySQL 断开，
+        # 同时提前取出后续要用的字段（rollback 会使 ORM 对象属性过期）
+        source_id, source_type = raw_data.source_id, raw_data.source_type
+        await self.db.rollback()
 
         final_state = await run_decision_flow(
             request_id=request_id,
@@ -111,18 +127,22 @@ class RiskService:
                 message="Agent 决策流程返回空结果，请检查 LLM 配置",
                 status_code=500,
             )
+        agent_elapsed = round((time.monotonic() - t1) * 1000, 1)
+        stage_ms["agent_flow"] = agent_elapsed
         logger.info(
             "risk_service.agent_flow_complete",
             request_id=request_id,
             agent_status=final_state.get("status"),
             risk_score=final_state.get("risk_score"),
             risk_level=final_state.get("risk_level"),
-            decision=final_state.get("decision_result", {}).get("action"),
+            decision=(final_state.get("decision_result") or {}).get("action"),
             confidence=final_state.get("confidence"),
-            elapsed_ms=round((time.monotonic() - t1) * 1000, 1),
+            node_timings=final_state.get("node_timings") or [],
+            elapsed_ms=agent_elapsed,
         )
 
         # ── 阶段 4：提取并持久化分析结果 ──
+        t4 = time.monotonic()
         analysis = AnalysisResult(
             request_id=request_id,
             raw_data_id=raw_data_id,
@@ -131,37 +151,72 @@ class RiskService:
             anomaly_tags=final_state.get("anomaly_tags", []),
             reasoning=final_state.get("analysis_reasoning", ""),
             facts_summary={
-                "source_id": raw_data.source_id,
-                "source_type": raw_data.source_type,
+                "source_id": source_id,
+                "source_type": source_type,
                 "data_quality_score": final_state.get("data_quality_score"),
                 "data_issues": final_state.get("data_issues", []),
                 "structured_facts": final_state.get("structured_facts"),
             },
         )
         await self.analysis_repo.create(analysis)
+        stage_ms["persist_analysis"] = round((time.monotonic() - t4) * 1000, 1)
+        logger.info(
+            "risk_service.analysis_persisted",
+            request_id=request_id,
+            analysis_id=analysis.id,
+            risk_score=analysis.risk_score,
+            risk_level=analysis.risk_level.value,
+            elapsed_ms=stage_ms["persist_analysis"],
+        )
 
         # ── 阶段 5：提取并持久化决策结果 ──
+        t5 = time.monotonic()
         decision_result = final_state.get("decision_result") or {}
         reflection = final_state.get("reflection_result") or {}
+        agent_status = final_state.get("status")
+        # 进入人工审核流程的决策标记为 pending_review，而非默认 approve
+        decision_enum = (
+            DecisionModel.PENDING_REVIEW
+            if agent_status == DecisionStatus.HUMAN_REVIEW
+            else DecisionModel(decision_result.get("action", "approve"))
+        )
         decision = DecisionResult(
             request_id=request_id,
             analysis_id=analysis.id,
-            decision=DecisionModel(decision_result.get("action", "approve")),
+            decision=decision_enum,
             confidence=final_state.get("confidence", 0.0),
             explanation=final_state.get("decision_explanation", ""),
             decision_path=final_state.get("decision_path", []),
             reflection_passed=reflection.get("passed", True),
         )
         await self.decision_repo.create(decision)
+        stage_ms["persist_decision"] = round((time.monotonic() - t5) * 1000, 1)
+        logger.info(
+            "risk_service.decision_persisted",
+            request_id=request_id,
+            decision=decision.decision.value,
+            confidence=decision.confidence,
+            reflection_passed=decision.reflection_passed,
+            elapsed_ms=stage_ms["persist_decision"],
+        )
 
         # ── 阶段 6：更新原始数据状态 ──
+        t6 = time.monotonic()
         quality_score = final_state.get("data_quality_score", 0.95)
         await self.raw_data_repo.update_status(raw_data_id, RawDataStatus.PROCESSED, quality_score=quality_score)
+        stage_ms["update_raw_data"] = round((time.monotonic() - t6) * 1000, 1)
+        logger.info(
+            "risk_service.raw_data_updated",
+            request_id=request_id,
+            new_status=RawDataStatus.PROCESSED.value,
+            quality_score=quality_score,
+            elapsed_ms=stage_ms["update_raw_data"],
+        )
 
         # ── 阶段 7：高风险/人工审核通知 ──
-        agent_status = final_state.get("status")
         risk_level = final_state.get("risk_level")
         if agent_status == DecisionStatus.HUMAN_REVIEW or risk_level in ("high", "critical"):
+            t7 = time.monotonic()
             try:
                 from app.services.notification_service import NotificationService
                 notifier = NotificationService()
@@ -181,6 +236,7 @@ class RiskService:
                     request_id=request_id,
                     level=risk_level,
                     status=agent_status,
+                    elapsed_ms=round((time.monotonic() - t7) * 1000, 1),
                 )
             except Exception as e:
                 logger.warning(
@@ -188,12 +244,17 @@ class RiskService:
                     request_id=request_id,
                     error=str(e),
                 )
+            finally:
+                stage_ms["notify"] = round((time.monotonic() - t7) * 1000, 1)
 
         # ── 阶段 8：显式提交事务 ──
+        t8 = time.monotonic()
         await self.db.commit()
-        logger.debug(
+        stage_ms["commit"] = round((time.monotonic() - t8) * 1000, 1)
+        logger.info(
             "risk_service.transaction_committed",
             request_id=request_id,
+            elapsed_ms=stage_ms["commit"],
         )
 
         total_elapsed = round((time.monotonic() - flow_start) * 1000, 1)
@@ -207,6 +268,7 @@ class RiskService:
             confidence=decision.confidence,
             agent_status=agent_status,
             total_elapsed_ms=total_elapsed,
+            stage_ms=stage_ms,
         )
 
         return {

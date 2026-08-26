@@ -42,8 +42,7 @@ export function UserManagement() {
         page_size: 50,
       });
       setUsers(res?.data?.items || []);
-    } catch (error) {
-      console.error('Failed to fetch users:', error);
+    } catch {
       addToast({ type: 'error', title: '加载失败', message: '无法获取用户列表' });
     } finally {
       setLoading(false);
@@ -60,7 +59,7 @@ export function UserManagement() {
       await userService.delete(user.id);
       addToast({ type: 'success', title: '删除成功', message: `用户 ${user.username} 已删除` });
       fetchData();
-    } catch (error) {
+    } catch {
       addToast({ type: 'error', title: '删除失败', message: '用户删除失败，请重试' });
     }
   };
@@ -74,7 +73,7 @@ export function UserManagement() {
         message: `用户 ${user.username} 已${user.is_active ? '禁用' : '启用'}`,
       });
       fetchData();
-    } catch (error) {
+    } catch {
       addToast({ type: 'error', title: '操作失败', message: '用户状态更新失败' });
     }
   };
@@ -213,8 +212,8 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void; onSucces
       await userService.create({ username, email, password, role });
       addToast({ type: 'success', title: '创建成功', message: `用户 ${username} 已创建` });
       onSuccess();
-    } catch (error: any) {
-      const msg = error?.response?.data?.detail || '创建失败，请重试';
+    } catch (error: unknown) {
+      const msg = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail || '创建失败，请重试';
       addToast({ type: 'error', title: '创建失败', message: typeof msg === 'string' ? msg : '未知错误' });
     } finally {
       setSubmitting(false);
@@ -259,8 +258,8 @@ function EditUserModal({ user, onClose, onSuccess }: { user: User; onClose: () =
       await userService.update(user.id, { email, role });
       addToast({ type: 'success', title: '更新成功', message: `用户 ${user.username} 已更新` });
       onSuccess();
-    } catch (error: any) {
-      const msg = error?.response?.data?.detail || '更新失败，请重试';
+    } catch (error: unknown) {
+      const msg = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail || '更新失败，请重试';
       addToast({ type: 'error', title: '更新失败', message: typeof msg === 'string' ? msg : '未知错误' });
     } finally {
       setSubmitting(false);

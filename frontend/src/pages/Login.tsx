@@ -31,7 +31,6 @@ export function Login() {
     try {
       const response = await authService.login({ username, password });
       const { access_token, user } = response.data;
-      localStorage.setItem('auth_token', access_token);
       login(
         {
           id: user.id,

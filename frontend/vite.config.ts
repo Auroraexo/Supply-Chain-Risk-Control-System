@@ -6,6 +6,14 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   build: {
     sourcemap: 'hidden',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom', 'zustand'],
+          charts: ['recharts'],
+        },
+      },
+    },
   },
   plugins: [
     react({

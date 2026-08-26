@@ -20,10 +20,10 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={clsx(
-          'rounded-card border border-border',
-          glass ? 'bg-bg-secondary/60 backdrop-blur-md' : 'bg-bg-secondary',
+          'rounded-card border border-border shadow-card',
+          glass ? 'bg-bg-secondary/85 backdrop-blur-md' : 'bg-bg-secondary',
           paddings[padding],
-          hover && 'transition-all duration-200 hover:-translate-y-1 hover:shadow-card-hover hover:border-accent-blue/30',
+          hover && 'transition-[border-color,box-shadow] duration-200 hover:shadow-card-hover hover:border-accent-blue/30',
           className
         )}
         {...props}

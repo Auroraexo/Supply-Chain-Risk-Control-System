@@ -20,6 +20,33 @@ from app.agents.state import AgentState, DecisionStatus, RiskLevel
 logger = structlog.get_logger(__name__)
 
 
+def _route_elapsed(state: AgentState) -> float:
+    """计算路由判定时刻相对流程开始的耗时（毫秒），用于定位决策点时间线。"""
+    start = state.get("_flow_start_mono")
+    return round((time.monotonic() - start) * 1000, 1) if start else 0.0
+
+
+def _timed_node(name: str, node_fn):
+    """节点计时包装：记录单节点耗时，并累积到 state["node_timings"] 供流程结束汇总。"""
+    async def wrapper(state):
+        node_t0 = time.monotonic()
+        logger.info("graph.node_start", node=name, request_id=state.get("request_id"))
+        result = await node_fn(state)
+        elapsed = round((time.monotonic() - node_t0) * 1000, 1)
+        timings = list(result.get("node_timings") or [])
+        timings.append({"node": name, "elapsed_ms": elapsed})
+        result["node_timings"] = timings
+        logger.info(
+            "graph.node_complete",
+            node=name,
+            request_id=state.get("request_id"),
+            elapsed_ms=elapsed,
+            sequence=len(timings),
+        )
+        return result
+    return wrapper
+
+
 def should_continue_after_scout(state: AgentState) -> str:
     """侦察兵完成后路由。"""
     request_id = state.get("request_id", "unknown")
@@ -28,16 +55,16 @@ def should_continue_after_scout(state: AgentState) -> str:
     retry = state.get("retry_count", 0)
 
     if status == DecisionStatus.FAILED:
-        logger.warning("graph.route.scout_to_human_review", request_id=request_id, reason="status_failed")
+        logger.warning("graph.route.scout_to_human_review", request_id=request_id, reason="status_failed", elapsed_ms=_route_elapsed(state))
         return "human_review"
     if quality < 0.5:
-        logger.warning("graph.route.scout_to_human_review", request_id=request_id, reason="low_quality", quality_score=quality)
+        logger.warning("graph.route.scout_to_human_review", request_id=request_id, reason="low_quality", quality_score=quality, elapsed_ms=_route_elapsed(state))
         return "human_review"
     if retry > 2:
-        logger.warning("graph.route.scout_to_human_review", request_id=request_id, reason="retry_exhausted", retry_count=retry)
+        logger.warning("graph.route.scout_to_human_review", request_id=request_id, reason="retry_exhausted", retry_count=retry, elapsed_ms=_route_elapsed(state))
         return "human_review"
 
-    logger.info("graph.route.scout_to_analyst", request_id=request_id, quality_score=quality)
+    logger.info("graph.route.scout_to_analyst", request_id=request_id, quality_score=quality, elapsed_ms=_route_elapsed(state))
     return "analyst"
 
 
@@ -49,16 +76,16 @@ def should_continue_after_analyst(state: AgentState) -> str:
     risk_level = state.get("risk_level")
 
     if status == DecisionStatus.FAILED:
-        logger.warning("graph.route.analyst_to_human_review", request_id=request_id, reason="status_failed")
+        logger.warning("graph.route.analyst_to_human_review", request_id=request_id, reason="status_failed", elapsed_ms=_route_elapsed(state))
         return "human_review"
     if retry > 3:
-        logger.warning("graph.route.analyst_to_human_review", request_id=request_id, reason="retry_exhausted", retry_count=retry)
+        logger.warning("graph.route.analyst_to_human_review", request_id=request_id, reason="retry_exhausted", retry_count=retry, elapsed_ms=_route_elapsed(state))
         return "human_review"
     if risk_level in (RiskLevel.HIGH.value, RiskLevel.CRITICAL.value):
-        logger.info("graph.route.analyst_to_reflection", request_id=request_id, risk_level=risk_level, reason="high_risk")
+        logger.info("graph.route.analyst_to_reflection", request_id=request_id, risk_level=risk_level, reason="high_risk", elapsed_ms=_route_elapsed(state))
         return "reflection"
 
-    logger.info("graph.route.analyst_to_decider", request_id=request_id, risk_level=risk_level)
+    logger.info("graph.route.analyst_to_decider", request_id=request_id, risk_level=risk_level, elapsed_ms=_route_elapsed(state))
     return "decider"
 
 
@@ -69,10 +96,10 @@ def should_continue_after_reflection(state: AgentState) -> str:
     passed = reflection.get("passed", True)
 
     if not passed:
-        logger.warning("graph.route.reflection_to_human_review", request_id=request_id, suggestions=reflection.get("suggestions"))
+        logger.warning("graph.route.reflection_to_human_review", request_id=request_id, suggestions=reflection.get("suggestions"), elapsed_ms=_route_elapsed(state))
         return "human_review"
 
-    logger.info("graph.route.reflection_to_decider", request_id=request_id)
+    logger.info("graph.route.reflection_to_decider", request_id=request_id, elapsed_ms=_route_elapsed(state))
     return "decider"
 
 
@@ -82,10 +109,15 @@ def should_continue_after_decider(state: AgentState) -> str:
     status = state.get("status")
 
     if status == DecisionStatus.FAILED:
-        logger.warning("graph.route.decider_to_human_review", request_id=request_id, reason="status_failed")
+        logger.warning("graph.route.decider_to_human_review", request_id=request_id, reason="status_failed", elapsed_ms=_route_elapsed(state))
         return "human_review"
 
-    logger.info("graph.route.decider_to_end", request_id=request_id, decision=state.get("decision_result", {}).get("action"))
+    logger.info(
+        "graph.route.decider_to_end",
+        request_id=request_id,
+        decision=(state.get("decision_result") or {}).get("action"),
+        elapsed_ms=_route_elapsed(state),
+    )
     return "complete"
 
 
@@ -103,12 +135,12 @@ def build_decision_graph() -> StateGraph:
     # 但 dict schema 在运行时完全可用（已验证），故此处精准抑制类型告警。
     workflow = StateGraph(dict[str, Any])  # type: ignore[type-var]
 
-    # 添加节点
-    workflow.add_node("scout", scout_node)
-    workflow.add_node("analyst", analyst_node)
-    workflow.add_node("decider", decider_node)
-    workflow.add_node("reflection", reflection_node)
-    workflow.add_node("human_review", human_review_node)
+    # 添加节点（_timed_node 包装：记录每个节点的执行耗时）
+    workflow.add_node("scout", _timed_node("scout", scout_node))
+    workflow.add_node("analyst", _timed_node("analyst", analyst_node))
+    workflow.add_node("decider", _timed_node("decider", decider_node))
+    workflow.add_node("reflection", _timed_node("reflection", reflection_node))
+    workflow.add_node("human_review", _timed_node("human_review", human_review_node))
 
     # 设置入口
     workflow.set_entry_point("scout")
@@ -163,6 +195,7 @@ async def run_decision_flow(request_id: str, raw_data_id: str, raw_data_payload:
     from app.agents.state import create_initial_state
 
     initial_state = create_initial_state(request_id, raw_data_id)
+    initial_state["_flow_start_mono"] = time.monotonic()
     if raw_data_payload:
         initial_state["raw_data_payload"] = raw_data_payload
         logger.info(
@@ -183,14 +216,16 @@ async def run_decision_flow(request_id: str, raw_data_id: str, raw_data_payload:
     final_state = await decision_app.ainvoke(initial_state, config)  # type: ignore[call-overload]  # 同上：langgraph 1.x 存根与运行时不一致
 
     total_elapsed = round((time.monotonic() - flow_start) * 1000, 1)
+    node_timings = final_state.get("node_timings") or []
     logger.info(
         "graph.flow_complete",
         request_id=request_id,
         status=final_state.get("status"),
         risk_score=final_state.get("risk_score"),
         risk_level=final_state.get("risk_level"),
-        decision=final_state.get("decision_result", {}).get("action"),
+        decision=(final_state.get("decision_result") or {}).get("action"),
         confidence=final_state.get("confidence"),
+        node_timings=node_timings,
         total_elapsed_ms=total_elapsed,
     )
     return final_state

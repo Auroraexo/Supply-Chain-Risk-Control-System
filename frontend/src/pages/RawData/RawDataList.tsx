@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Upload, Download, Trash2, Eye } from 'lucide-react';
+import { Plus, Upload, Download, Eye } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import Empty from '@/components/Empty';
 import { useToastStore } from '@/stores/toastStore';
 import { dataService } from '@/services/dataService';
 import type { RawData, DataStatus } from '@/types/models';
@@ -39,20 +41,6 @@ const columns: TableColumn<RawData>[] = [
     header: '创建时间',
     render: (row) => <span className="text-text-secondary">{new Date(row.created_at).toLocaleString('zh-CN')}</span>,
   },
-  {
-    key: 'actions',
-    header: '操作',
-    render: (row) => (
-      <div className="flex items-center gap-1">
-        <button aria-label="查看" className="p-1.5 rounded-btn text-text-muted hover:text-accent-blue hover:bg-accent-blue/10 transition-colors" onClick={(e) => { e.stopPropagation(); }}>
-          <Eye size={16} />
-        </button>
-        <button aria-label="删除" className="p-1.5 rounded-btn text-text-muted hover:text-risk-critical hover:bg-risk-critical/10 transition-colors" onClick={(e) => { e.stopPropagation(); }}>
-          <Trash2 size={16} />
-        </button>
-      </div>
-    ),
-  },
 ];
 
 export function RawDataList() {
@@ -76,8 +64,7 @@ export function RawDataList() {
         page_size: 50,
       });
       setData(res?.data?.items || []);
-    } catch (error) {
-      console.error('Failed to fetch raw data:', error);
+    } catch {
       addToast({ type: 'error', title: '加载失败', message: '无法获取数据列表' });
     } finally {
       setLoading(false);
@@ -101,30 +88,14 @@ export function RawDataList() {
       setShowCreateModal(false);
       addToast({ type: 'success', title: '数据创建成功', message: '新的原始数据已提交' });
       fetchData();
-    } catch (error) {
+    } catch {
       addToast({ type: 'error', title: '创建失败', message: '数据提交失败，请重试' });
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除这条数据吗？')) return;
-    try {
-      await dataService.delete(id);
-      addToast({ type: 'success', title: '删除成功', message: '数据已删除' });
-      fetchData();
-    } catch (error) {
-      addToast({ type: 'error', title: '删除失败', message: '数据删除失败，请重试' });
     }
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-h1 text-text-primary">原始数据管理</h1>
-          <p className="text-body text-text-secondary mt-1">管理供应链风险分析的原始数据</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader eyebrow="Data Center" title="供应链数据中心" description="管理风险分析所需的供应商、库存与物流数据" actions={<>
           <Button variant="outline" size="sm">
             <Upload size={16} />
             批量导入
@@ -137,16 +108,15 @@ export function RawDataList() {
             <Plus size={16} />
             录入数据
           </Button>
-        </div>
-      </div>
+        </>} />
 
       <Card padding="none">
-        <div className="flex items-center gap-3 p-4 border-b border-border">
+        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">
           <Input
             placeholder="搜索数据来源..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
+            className="w-full sm:max-w-xs"
           />
           <Select
             options={[
@@ -168,7 +138,7 @@ export function RawDataList() {
             ))}
           </div>
         ) : (
-          <Table
+          data.length === 0 ? <Empty title="暂无供应链数据" description="录入或批量导入数据后，可以启动风险识别与分析。" action={<Button size="sm" onClick={() => setShowCreateModal(true)}><Plus size={15}/>录入第一条数据</Button>} /> : <Table
             columns={columns}
             data={data}
             keyExtractor={(d) => d.id}
