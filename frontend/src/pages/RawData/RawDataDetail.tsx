@@ -5,6 +5,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { StatePanel } from '@/components/ui/StatePanel';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { dataService } from '@/services/dataService';
 import type { RawData } from '@/types/models';
 
@@ -20,6 +22,7 @@ export function RawDataDetail() {
   const navigate = useNavigate();
   const [data, setData] = useState<RawData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -29,6 +32,7 @@ export function RawDataDetail() {
         setData(res.data);
       } catch (error) {
         console.error('Failed to fetch raw data:', error);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -62,6 +66,10 @@ export function RawDataDetail() {
     );
   }
 
+  if (loadError) {
+    return <StatePanel title="无法加载数据详情" description="原始数据服务暂时不可用，请稍后重试。" onRetry={() => window.location.reload()} />;
+  }
+
   if (!data) {
     return (
       <div className="space-y-6 animate-fade-in">
@@ -80,16 +88,7 @@ export function RawDataDetail() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-          <ArrowLeft size={16} />
-          返回
-        </Button>
-        <div>
-          <h1 className="text-h1 text-text-primary">数据详情</h1>
-          <p className="text-body text-text-secondary mt-1">{data.source_type} · {data.source_id}</p>
-        </div>
-      </div>
+      <PageHeader eyebrow="Data Record" title="数据详情" description={`${data.source_type} · ${data.source_id || '未设置源 ID'}`} actions={<Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft size={16} />返回</Button>} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>

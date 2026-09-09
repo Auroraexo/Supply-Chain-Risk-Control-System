@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Modal } from '@/components/ui/Modal';
 import { AutomationModal } from '@/components/business/AutomationModal';
+import Empty from '@/components/Empty';
 import { ChevronRight, ChevronDown, Plus, ToggleLeft, ToggleRight, Edit3, Trash2, Save, Loader2, GripVertical, Play, Copy, EyeOff, Sparkles } from 'lucide-react';
 import { useToastStore } from '@/stores/toastStore';
 import { ruleService } from '@/services/ruleService';
@@ -502,10 +503,7 @@ export function RuleEditor() {
         </div>
         <div className="p-4">
           {tree.length === 0 ? (
-            <div className="p-12 text-center text-text-muted">
-              <p className="text-body">暂无规则</p>
-              <p className="text-caption mt-1">点击"添加节点"创建第一个规则</p>
-            </div>
+            <Empty title="暂无规则节点" description="创建第一个规则节点后，可以拖拽编排风险判断逻辑。" action={<Button size="sm" onClick={handleOpenModal}><Plus size={15}/>添加第一个节点</Button>} />
           ) : (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={tree.map((n) => n.id)} strategy={verticalListSortingStrategy}>

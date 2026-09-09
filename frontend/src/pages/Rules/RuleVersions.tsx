@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { DiffView } from '@/components/ui/DiffView';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { StatePanel } from '@/components/ui/StatePanel';
+import Empty from '@/components/Empty';
 import { ruleService } from '@/services/ruleService';
 import type { RuleVersion } from '@/types/models';
 
@@ -16,6 +19,7 @@ export function RuleVersions() {
   const [selectedLeft, setSelectedLeft] = useState<number | null>(null);
   const [selectedRight, setSelectedRight] = useState<number | null>(null);
   const [showDiff, setShowDiff] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     async function fetchVersions() {
@@ -30,6 +34,7 @@ export function RuleVersions() {
         }
       } catch (error) {
         console.error('Failed to fetch rule versions:', error);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -48,16 +53,7 @@ export function RuleVersions() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/rules')}>
-          <ArrowLeft size={16} />
-          返回规则编辑
-        </Button>
-        <div>
-          <h1 className="text-h1 text-text-primary">规则版本管理</h1>
-          <p className="text-body text-text-secondary mt-1">查看和管理规则变更历史</p>
-        </div>
-      </div>
+      <PageHeader eyebrow="Policy History" title="规则版本管理" description="查看、选择并对比规则变更历史" actions={<Button variant="ghost" size="sm" onClick={() => navigate('/rules')}><ArrowLeft size={16} />返回规则编辑</Button>} />
 
       {loading ? (
         <div className="space-y-3">
@@ -65,10 +61,10 @@ export function RuleVersions() {
             <Skeleton key={i} className="h-24 w-full" />
           ))}
         </div>
+      ) : loadError ? (
+        <StatePanel title="无法加载规则版本" description="规则历史服务暂时不可用，请重试。" onRetry={() => window.location.reload()} />
       ) : versions.length === 0 ? (
-        <Card className="p-12 text-center">
-          <p className="text-body text-text-muted">暂无版本记录</p>
-        </Card>
+        <Card><Empty title="暂无版本记录" description="保存规则后，系统会在这里保留可审计的版本快照。" icon={<GitCompare size={24} />} /></Card>
       ) : (
         <div className="space-y-4">
           {/* 版本对比栏 */}
@@ -145,8 +141,8 @@ export function RuleVersions() {
                     创建: {new Date(version.created_at).toLocaleString('zh-CN')}
                   </p>
                 </div>
-                <Button variant="outline" size="sm">
-                  查看详情
+                <Button variant="outline" size="sm" onClick={() => { setSelectedLeft(i); setShowDiff(false); }}>
+                  {selectedLeft === i ? '已选为版本 A' : '选为版本 A'}
                 </Button>
               </Card>
             ))}
