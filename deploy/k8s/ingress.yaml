@@ -1,0 +1,38 @@
+# =============================================================================
+# 供应链智能决策系统 - K8s Ingress（Nginx Ingress Controller）
+# 含 WebSocket 升级配置与限流注解；TLS 需先创建 secret: app-tls
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app
+  namespace: supply-chain
+  labels:
+    app: supply-chain-risk-control
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # WebSocket 升级（FastAPI /ws 端点）
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/connection-proxy-header: "Upgrade"
+    # IP 级限流（与 slowapi 应用层限流互补）
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    # 请求体大小限制
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - your-domain.com
+      secretName: app-tls
+  rules:
+    - host: your-domain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: app
+                port:
+                  number: 8000

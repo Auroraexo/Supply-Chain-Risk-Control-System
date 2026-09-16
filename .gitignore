@@ -12,6 +12,9 @@ venv/
 .env.local
 .env.*.local
 
+# K8s Secret 真实值
+deploy/k8s/secrets.yaml
+
 # IDE
 .vscode/
 .idea/
@@ -25,6 +28,15 @@ coverage_html/
 .junit/
 test-results/
 .pytest_cache/
+pytest-cache-files-*/
+test_output.txt
+test_results.json
+
+# 验证/备份产物
+verify_report_*.json
+backup_report_*.json
+seed_output.log
+locust_report.html
 
 # 类型检查
 .mypy_cache/

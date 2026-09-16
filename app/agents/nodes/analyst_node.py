@@ -14,6 +14,7 @@ from app.agents.prompt_loader import get_prompt_loader
 from app.agents.state import AgentState, DecisionStatus, RiskLevel
 from app.agents.tools.risk_tools import calculate_risk_score, query_historical_patterns
 from app.core.llm import get_llm
+from app.core.metrics import record_llm_usage as _record_llm_usage
 
 logger = structlog.get_logger(__name__)
 
@@ -236,6 +237,7 @@ async def _generate_reasoning(
         ]
         t_llm = time.monotonic()
         resp = await llm.ainvoke(messages)
+        _record_llm_usage("analyst", llm, resp)
         content = getattr(resp, "content", "")
         logger.info(
             "analyst.reasoning_llm",

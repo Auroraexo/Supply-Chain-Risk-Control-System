@@ -16,6 +16,12 @@ from app.agents.nodes.human_review_node import human_review_node
 from app.agents.nodes.reflection_node import reflection_node
 from app.agents.nodes.scout_node import scout_node
 from app.agents.state import AgentState, DecisionStatus, RiskLevel
+from app.core.metrics import (
+    AGENT_CALLS_TOTAL,
+    AGENT_LATENCY_SECONDS,
+    DECISION_CONFIDENCE,
+    DECISIONS_TOTAL,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -31,8 +37,16 @@ def _timed_node(name: str, node_fn):
     async def wrapper(state):
         node_t0 = time.monotonic()
         logger.info("graph.node_start", node=name, request_id=state.get("request_id"))
-        result = await node_fn(state)
+        try:
+            result = await node_fn(state)
+        except Exception:
+            AGENT_CALLS_TOTAL.labels(
+                agent_name=name, node_name=name, status="error"
+            ).inc()
+            raise
         elapsed = round((time.monotonic() - node_t0) * 1000, 1)
+        AGENT_LATENCY_SECONDS.labels(agent_name=name, node_name=name).observe(elapsed / 1000)
+        AGENT_CALLS_TOTAL.labels(agent_name=name, node_name=name, status="success").inc()
         timings = list(result.get("node_timings") or [])
         timings.append({"node": name, "elapsed_ms": elapsed})
         result["node_timings"] = timings
@@ -217,6 +231,17 @@ async def run_decision_flow(request_id: str, raw_data_id: str, raw_data_payload:
 
     total_elapsed = round((time.monotonic() - flow_start) * 1000, 1)
     node_timings = final_state.get("node_timings") or []
+
+    # === 决策指标 ===
+    decision_result = final_state.get("decision_result") or {}
+    confidence = final_state.get("confidence")
+    risk_level = final_state.get("risk_level") or "unknown"
+    action = decision_result.get("action") or "none"
+    if confidence is not None:
+        DECISION_CONFIDENCE.labels(decision_type=action).set(confidence)
+    if final_state.get("status") == DecisionStatus.COMPLETED:
+        DECISIONS_TOTAL.labels(decision_type=action, risk_level=risk_level).inc()
+
     logger.info(
         "graph.flow_complete",
         request_id=request_id,

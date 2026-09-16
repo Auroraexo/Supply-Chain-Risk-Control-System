@@ -1,0 +1,83 @@
+# =============================================================================
+# 供应链智能决策系统 - K8s RabbitMQ（含管理面板）
+# =============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: supply-chain
+  labels:
+    app: rabbitmq
+spec:
+  serviceName: rabbitmq
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3-management-alpine
+          ports:
+            - containerPort: 5672
+              name: amqp
+            - containerPort: 15672
+              name: management
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: guest
+            - name: RABBITMQ_DEFAULT_PASS
+              value: guest
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "check_port_connectivity"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "check_port_connectivity"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: supply-chain
+  labels:
+    app: rabbitmq
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5672
+      targetPort: 5672
+      name: amqp
+    - port: 15672
+      targetPort: 15672
+      name: management
+  selector:
+    app: rabbitmq

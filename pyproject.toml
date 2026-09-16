@@ -43,6 +43,7 @@ dependencies = [
     # 工具
     "httpx>=0.27.0",
     "python-dotenv>=1.0.0",
+    "prometheus-client>=0.20.0",
 ]
 
 [project.optional-dependencies]
@@ -118,3 +119,8 @@ packages = ["app"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "locust>=2.46.5",
+]

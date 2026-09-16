@@ -1,4 +1,4 @@
-.PHONY: help install lock sync lint format typecheck security test coverage agent-eval clean docker-build docker-up docker-down db-migrate db-revision
+.PHONY: help install lock sync lint format typecheck security test coverage agent-eval load-test clean docker-build docker-up docker-down db-migrate db-revision
 
 help: ## 显示帮助信息
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -38,6 +38,12 @@ coverage: ## 运行测试并生成覆盖率报告
 
 agent-eval: ## 运行 Agent 评估测试
 	uv run pytest tests/agent_eval/ -v
+
+load-test: ## 运行性能压测（需先启动服务，用法: make load-test HOST=http://localhost:8000）
+	PYTHONUTF8=1 uv run python -m locust -f tests/locustfile.py --host=$(or $(HOST),http://localhost:8000) --headless -u 50 -r 5 -t 1m --html locust_report.html
+
+load-test-ui: ## 启动压测 Web UI（http://localhost:8089）
+	PYTHONUTF8=1 uv run python -m locust -f tests/locustfile.py --host=$(or $(HOST),http://localhost:8000)
 
 integration: ## 运行集成测试
 	uv run pytest tests/integration/ -v
@@ -86,6 +92,8 @@ pre-commit-run: ## 手动运行 pre-commit
 clean: ## 清理临时文件
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name "pytest-cache-files-*" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	rm -rf coverage_html/ .coverage .mypy_cache/ 2>/dev/null || true
+	rm -f seed_output.log verify_report_*.json backup_report_*.json tests/test_output.txt tests/test_results.json 2>/dev/null || true
 	@echo "清理完成"

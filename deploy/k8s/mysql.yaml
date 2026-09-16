@@ -1,0 +1,87 @@
+# =============================================================================
+# 供应链智能决策系统 - K8s MySQL 8.0
+# 单实例部署；生产高可用建议使用云厂商托管数据库（RDS 等）替代
+# =============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: supply-chain
+  labels:
+    app: mysql
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+              name: mysql
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              value: supply_chain_risk
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          livenessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+      volumes:
+        - name: init-sql
+          configMap:
+            name: mysql-init-sql
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: supply-chain
+  labels:
+    app: mysql
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3306
+      targetPort: 3306
+  selector:
+    app: mysql

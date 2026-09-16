@@ -13,6 +13,7 @@ from app.agents.prompt_loader import get_prompt_loader
 from app.agents.state import AgentState, DecisionStatus
 from app.agents.tools.data_tools import check_data_quality, get_raw_data
 from app.core.llm import get_llm
+from app.core.metrics import record_llm_usage as _record_llm_usage
 
 logger = structlog.get_logger(__name__)
 
@@ -165,6 +166,7 @@ async def _generate_quality_notes(
         ]
         t_llm = time.monotonic()
         resp = await llm.ainvoke(messages)
+        _record_llm_usage("scout", llm, resp)
         content = getattr(resp, "content", "")
         logger.info(
             "scout.quality_notes_llm",

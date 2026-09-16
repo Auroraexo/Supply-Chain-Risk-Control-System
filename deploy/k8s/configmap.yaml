@@ -1,0 +1,22 @@
+# =============================================================================
+# 供应链智能决策系统 - K8s ConfigMap
+# 非敏感配置。敏感信息（密码、API Key）使用 Secret，见 secrets.example.yaml
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: supply-chain
+  labels:
+    app: supply-chain-risk-control
+data:
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  LOG_LEVEL: "INFO"
+  # 服务发现使用集群内 DNS；密码部分由 app.yaml 中 env 拼接，
+  # 或直接改用 External Secrets 注入完整 DATABASE_URL
+  REDIS_URL: "redis://redis.supply-chain.svc.cluster.local:6379/0"
+  RABBITMQ_URL: "amqp://guest:guest@rabbitmq.supply-chain.svc.cluster.local:5672/"
+  CORS_ORIGINS: "https://your-domain.com"
+  LLM_PROVIDER: "openai"
+  LLM_MODEL: "gpt-4o-mini"

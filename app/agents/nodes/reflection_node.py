@@ -13,6 +13,7 @@ import structlog
 from app.agents.prompt_loader import get_prompt_loader
 from app.agents.state import AgentState
 from app.core.llm import get_llm
+from app.core.metrics import record_llm_usage as _record_llm_usage
 
 logger = structlog.get_logger(__name__)
 
@@ -169,6 +170,7 @@ async def _generate_review_notes(
         ]
         t_llm = time.monotonic()
         resp = await llm.ainvoke(messages)
+        _record_llm_usage("reflection", llm, resp)
         content = getattr(resp, "content", "")
         logger.info(
             "reflection.review_notes_llm",

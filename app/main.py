@@ -8,25 +8,26 @@ FastAPI 应用主入口，负责：
 - OpenAPI 文档配置
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 
 from app.api.v1.router import api_router
 from app.api.v1.websocket import router as ws_router
 from app.core.config import get_settings
+from app.core.database import close_db_connection
 from app.core.logging_config import setup_logging
 from app.core.middleware import (
-    TraceIdMiddleware,
+    MetricsMiddleware,
     RequestLoggingMiddleware,
+    TraceIdMiddleware,
     register_exception_handlers,
 )
-from app.core.database import close_db_connection
-from app.core.redis import close_redis_connection
 from app.core.mq import close_mq_connection
+from app.core.redis import close_redis_connection
 
 
 @asynccontextmanager
@@ -82,13 +83,22 @@ def create_app() -> FastAPI:
     # 2. Trace ID
     app.add_middleware(TraceIdMiddleware)
 
-    # 3. 请求日志
+    # 3. Prometheus 指标
+    app.add_middleware(MetricsMiddleware)
+
+    # 4. 请求日志
     if not settings.is_production:
         app.add_middleware(RequestLoggingMiddleware)
 
     # === 注册路由 ===
     app.include_router(api_router)
     app.include_router(ws_router)
+
+    # === Prometheus 指标 ===
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        """暴露 Prometheus 抓取端点。"""
+        return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
     # === 健康检查 ===
     @app.get("/health/live", tags=["Health"])

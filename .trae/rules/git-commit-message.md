@@ -1,3 +1,7 @@
+---
+scene: git_message
+---
+
 - 提交信息使用中文。
 - 遵循 Conventional Commits 规范，格式为：`<type>(<scope>): <subject>`。
 - `type` 必须为以下之一：

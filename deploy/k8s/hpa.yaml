@@ -1,0 +1,36 @@
+# =============================================================================
+# 供应链智能决策系统 - K8s HPA 自动扩缩容
+# CPU/Memory 驱动；自定义指标（QPS、Agent 队列深度）需 metrics-server + adapter
+# =============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: app
+  namespace: supply-chain
+  labels:
+    app: supply-chain-risk-control
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+    scaleUp:
+      stabilizationWindowSeconds: 60

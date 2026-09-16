@@ -3,6 +3,7 @@
 包含:
 - TraceIdMiddleware: 自动注入 trace_id 到请求上下文
 - RequestLoggingMiddleware: 请求日志记录
+- MetricsMiddleware: Prometheus 指标采集
 - ExceptionHandlerMiddleware: 全局异常处理
 """
 
@@ -16,6 +17,10 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.exceptions import AppException
+from app.core.metrics import HTTP_REQUEST_DURATION_SECONDS, HTTP_REQUESTS_TOTAL
+
+# 指标路径本身不记录，避免自增噪音
+_METRICS_PATH = "/metrics"
 
 logger = structlog.get_logger(__name__)
 
@@ -71,6 +76,35 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             elapsed_ms=elapsed_ms,
             client_ip=request.client.host if request.client else None,
         )
+
+        return response
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Prometheus 指标中间件。
+
+    记录每个请求的 QPS（http_requests_total）与延迟分布
+    （http_request_duration_seconds）。
+    """
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.url.path == _METRICS_PATH:
+            return await call_next(request)
+
+        method = request.method
+        # 使用路由模板而非实际路径，避免高基数（如 /api/v1/raw-data/{id}）
+        path_template = request.scope.get("route").path if "route" in request.scope else request.url.path
+
+        start_time = time.monotonic()
+        response = await call_next(request)
+        elapsed = time.monotonic() - start_time
+
+        HTTP_REQUESTS_TOTAL.labels(
+            method=method, path=path_template, status=response.status_code
+        ).inc()
+        HTTP_REQUEST_DURATION_SECONDS.labels(method=method, path=path_template).observe(elapsed)
 
         return response
 

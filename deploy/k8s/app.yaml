@@ -1,0 +1,90 @@
+# =============================================================================
+# 供应链智能决策系统 - K8s 应用 Deployment
+# 对应 Dockerfile 构建的镜像；HPA 见 hpa.yaml
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  namespace: supply-chain
+  labels:
+    app: supply-chain-risk-control
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: supply-chain-risk-control
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: supply-chain-risk-control
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+      containers:
+        - name: app
+          image: supply-chain-risk-control:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          env:
+            - name: DATABASE_URL
+              value: "mysql+asyncmy://root:$MYSQL_ROOT_PASSWORD@mysql.supply-chain.svc.cluster.local:3306/supply_chain_risk"
+          # 运行数据库迁移（Alembic），完成后由主进程接管
+          # 注：多副本并发迁移有风险，首次部署或迁移变更时建议用 Job 单独执行
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          # 镜像内已定义 HEALTHCHECK；K8s 使用显式探针
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+  namespace: supply-chain
+  labels:
+    app: supply-chain-risk-control
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      name: http
+  selector:
+    app: supply-chain-risk-control
