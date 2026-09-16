@@ -1,0 +1,21 @@
+- 提交信息使用中文。
+- 遵循 Conventional Commits 规范，格式为：`<type>(<scope>): <subject>`。
+- `type` 必须为以下之一：
+  - feat：新功能
+  - fix：修复缺陷
+  - docs：文档变更
+  - style：代码格式（不影响逻辑）
+  - refactor：重构（既不新增功能也不修复缺陷）
+  - perf：性能优化
+  - test：测试相关
+  - chore：构建/工具/依赖等杂项
+  - build：构建系统或外部依赖变更
+  - ci：CI 配置变更
+  - revert：回滚提交
+- `scope` 可选，表示影响范围（如模块名、文件名），使用小写英文。
+- `subject` 使用祈使句，简洁描述变更，不超过 50 个字符，末尾不加句号。
+- 正文（可选）：说明变更原因、影响和注意事项，每行不超过 72 个字符。
+- 若关联 Issue，在 footer 中写 `Closes #123` 或 `Refs #123`。
+- 不包含 emoji。
+- 避免无意义描述，如“更新代码”“修复问题”。
+- 破坏性变更需在 footer 中使用 `BREAKING CHANGE:` 说明。

@@ -24,6 +24,7 @@ export function LLMConfig() {
     model: '',
     api_key: '',
     base_url: '',
+    api_version: '2024-10-21',
     ollama_base_url: 'http://localhost:11434',
     temperature: 0.7,
     max_tokens: 4096,
@@ -52,6 +53,7 @@ export function LLMConfig() {
             model: res.data.model || '',
             api_key: res.data.api_key || '',
             base_url: res.data.base_url || '',
+            api_version: res.data.api_version || '2024-10-21',
             ollama_base_url: res.data.ollama_base_url || 'http://localhost:11434',
             temperature: typeof res.data.temperature === 'number' ? res.data.temperature : 0.7,
             max_tokens: typeof res.data.max_tokens === 'number' ? res.data.max_tokens : 4096,
@@ -77,6 +79,18 @@ export function LLMConfig() {
   }, [isLocal, loading]);
 
   const handleSave = async () => {
+    if (!config.model.trim()) {
+      addToast({ type: 'error', title: '模型名称不能为空', message: '请先填写或选择要使用的模型。' });
+      return;
+    }
+    if (!isLocal && !config.api_key.trim() && !config.api_key.includes('••')) {
+      addToast({ type: 'error', title: 'API Key 未配置', message: '云端模型需要填写 API Key。' });
+      return;
+    }
+    if (config.provider === 'azure_openai' && !config.base_url.trim()) {
+      addToast({ type: 'error', title: 'Azure Base URL 未配置', message: '请填写 Azure OpenAI 资源地址。' });
+      return;
+    }
     setSaving(true);
     try {
       await settingsService.updateLLMConfig(config);
@@ -89,6 +103,10 @@ export function LLMConfig() {
   };
 
   const handleTest = async () => {
+    if (!config.model.trim()) {
+      addToast({ type: 'error', title: '模型名称不能为空', message: '请先填写模型名称。' });
+      return;
+    }
     setTesting(true);
     try {
       const res = await settingsService.testLLMConnection({
@@ -96,6 +114,7 @@ export function LLMConfig() {
         model: config.model,
         api_key: config.api_key,
         base_url: config.base_url,
+        api_version: config.api_version,
         ollama_base_url: config.ollama_base_url,
       });
       if (res.data?.success) {
@@ -359,10 +378,19 @@ export function LLMConfig() {
               />
             )}
 
-            {(config.provider === 'openai' || config.provider === 'azure_openai') && (
+            {config.provider === 'azure_openai' && (
               <Input
-                label="Base URL（可选，兼容 API 代理地址）"
-                placeholder="默认: https://api.openai.com/v1"
+                label="Azure API Version"
+                placeholder="例如 2024-10-21"
+                value={config.api_version}
+                onChange={(e) => setConfig({ ...config, api_version: e.target.value })}
+              />
+            )}
+
+            {(config.provider === 'openai' || config.provider === 'azure_openai' || config.provider === 'anthropic') && (
+              <Input
+                label={config.provider === 'azure_openai' ? 'Azure OpenAI Base URL' : 'Base URL（可选，兼容 API 代理地址）'}
+                placeholder={config.provider === 'azure_openai' ? 'https://你的资源名.openai.azure.com' : config.provider === 'anthropic' ? '默认: https://api.anthropic.com' : '默认: https://api.openai.com/v1'}
                 value={config.base_url}
                 onChange={(e) => setConfig({ ...config, base_url: e.target.value })}
               />

@@ -15,12 +15,9 @@ from app.schemas.settings import (
     NotificationSettingsResponse,
     NotificationChannel,
 )
-from app.core.config import get_settings
+from app.core.config import get_effective_llm_config, get_settings, set_runtime_llm_config
 
 router = APIRouter(prefix="/settings")
-
-# 运行时 LLM 配置覆盖（内存存储）
-_runtime_llm_config: dict | None = None
 
 # 运行时通知渠道配置（内存存储）
 _runtime_notification_channels: list[dict] = [
@@ -42,35 +39,25 @@ def _human_size(num_bytes: int) -> str:
 @router.get("/llm", response_model=DataResponse)
 async def get_llm_config():
     """获取 LLM 配置。"""
-    settings = get_settings()
-    if _runtime_llm_config:
-        cfg = _runtime_llm_config
-    else:
-        cfg = {
-            "provider": settings.LLM_PROVIDER,
-            "model": settings.LLM_MODEL,
-            "api_key": "••••••••" if settings.LLM_API_KEY else "",
-            "base_url": settings.LLM_BASE_URL or "",
-            "ollama_base_url": settings.OLLAMA_BASE_URL,
-            "temperature": settings.LLM_TEMPERATURE,
-            "max_tokens": settings.LLM_MAX_TOKENS,
-            "mock_mode": settings.LLM_MOCK_MODE,
-            "smart_routing": settings.MODEL_SELECTOR_ENABLED,
-        }
+    cfg = get_effective_llm_config()
+    cfg["api_key"] = "••••••••" if cfg.get("api_key") else ""
     return DataResponse(data=LLMConfigResponse(**cfg).model_dump())
 
 
 @router.put("/llm", response_model=DataResponse)
 async def update_llm_config(config: LLMConfigRequest, user: AdminUser):
     """更新 LLM 配置。"""
-    global _runtime_llm_config
     cfg = config.model_dump()
     # 如果 API Key 是占位符，不覆盖真实值
     if cfg["api_key"] == "••••••••":
-        settings = get_settings()
-        cfg["api_key"] = settings.LLM_API_KEY
-    _runtime_llm_config = cfg
-    return DataResponse(data=cfg, message="LLM配置已更新")
+        cfg["api_key"] = get_effective_llm_config().get("api_key", "")
+    set_runtime_llm_config(cfg)
+    # Import lazily so the settings endpoint does not make optional model
+    # runtime dependencies a server-startup requirement.
+    from app.core.llm import get_llm
+    get_llm.cache_clear()
+    response_cfg = {**cfg, "api_key": "••••••••" if cfg.get("api_key") else ""}
+    return DataResponse(data=response_cfg, message="LLM配置已更新")
 
 
 @router.post("/llm/test", response_model=DataResponse)
@@ -81,12 +68,13 @@ async def test_llm_connection(request: LLMTestRequest):
     t0 = time.monotonic()
     try:
         api_key = request.api_key
+        effective = get_effective_llm_config()
         if not api_key or api_key == "••••••••":
-            api_key = get_settings().LLM_API_KEY
+            api_key = effective.get("api_key", "")
 
         # Ollama 本地模型不需要 API Key
         if request.provider == "local":
-            ollama_url = (request.ollama_base_url or get_settings().OLLAMA_BASE_URL).rstrip("/")
+            ollama_url = (request.ollama_base_url or effective.get("ollama_base_url") or get_settings().OLLAMA_BASE_URL).rstrip("/")
             async with httpx.AsyncClient(timeout=5) as client:
                 resp = await client.get(f"{ollama_url}/api/tags")
                 if resp.status_code == 200:
@@ -116,7 +104,7 @@ async def test_llm_connection(request: LLMTestRequest):
             )
 
         if request.provider == "openai":
-            base_url = request.base_url or "https://api.openai.com/v1"
+            base_url = request.base_url or effective.get("base_url") or "https://api.openai.com/v1"
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
                     f"{base_url.rstrip('/')}/models",
@@ -139,17 +127,20 @@ async def test_llm_connection(request: LLMTestRequest):
                 )
 
         elif request.provider == "azure_openai":
+            base_url = request.base_url or effective.get("base_url") or ""
+            if not base_url:
+                return DataResponse(data=LLMTestResponse(success=False, message="Azure OpenAI 需要填写 Base URL").model_dump())
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
-                    "https://api.openai.com/v1/models",
-                    headers={"Authorization": f"Bearer {api_key}"},
+                    f"{base_url.rstrip('/')}/openai/deployments?api-version={request.api_version}",
+                    headers={"api-key": api_key},
                 )
                 if resp.status_code == 200:
                     latency = round((time.monotonic() - t0) * 1000, 1)
                     return DataResponse(
                         data=LLMTestResponse(
                             success=True,
-                            message="连接成功，Azure OpenAI 兼容端点响应正常",
+                        message="连接成功，Azure OpenAI 端点响应正常",
                             latency_ms=latency,
                         ).model_dump()
                     )
@@ -161,9 +152,10 @@ async def test_llm_connection(request: LLMTestRequest):
                 )
 
         elif request.provider == "anthropic":
+            base_url = request.base_url or effective.get("base_url") or "https://api.anthropic.com"
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(
-                    "https://api.anthropic.com/v1/models",
+                    f"{base_url.rstrip('/')}/v1/models",
                     headers={
                         "x-api-key": api_key,
                         "anthropic-version": "2023-06-01",

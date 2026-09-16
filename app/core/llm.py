@@ -15,7 +15,7 @@ from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-from app.core.config import get_settings
+from app.core.config import get_effective_llm_config, get_settings
 
 
 class LLMProvider(StrEnum):
@@ -44,18 +44,19 @@ def get_llm(
         BaseChatModel 实例
     """
     settings = get_settings()
+    config = get_effective_llm_config()
 
     # Mock 模式
     if mock is None:
-        mock = settings.LLM_MOCK_MODE
+        mock = bool(config["mock_mode"])
     if mock:
         # 使用无限迭代器产出确定性假回复，避免 StopIteration 崩溃
         return GenericFakeChatModel(messages=iter(repeat(AIMessage(content="[mock] 这是模拟 LLM 回复"))))
 
     # 确定 provider
-    provider = provider or LLMProvider(settings.LLM_PROVIDER)
-    temp = temperature if temperature is not None else settings.LLM_TEMPERATURE
-    tokens = max_tokens if max_tokens is not None else settings.LLM_MAX_TOKENS
+    provider = provider or LLMProvider(str(config["provider"]))
+    temp = temperature if temperature is not None else float(config["temperature"])
+    tokens = max_tokens if max_tokens is not None else int(config["max_tokens"])
 
     common_kwargs: dict[str, Any] = {
         "temperature": temp,
@@ -64,29 +65,37 @@ def get_llm(
         "max_retries": 2,
     }
 
-    api_key = SecretStr(settings.LLM_API_KEY)
+    api_key = SecretStr(str(config["api_key"]))
+    model = str(config["model"])
+    configured_base_url = str(config.get("base_url") or "").strip()
 
     if provider == LLMProvider.OPENAI:
         return ChatOpenAI(
-            model=settings.LLM_MODEL,
+            model=model,
             api_key=api_key,
+            **({"base_url": configured_base_url} if configured_base_url else {}),
             **common_kwargs,
         )
 
     elif provider == LLMProvider.AZURE_OPENAI:
-        return ChatOpenAI(
-            model=settings.LLM_MODEL,
+        from langchain_openai import AzureChatOpenAI
+
+        if not configured_base_url:
+            raise ValueError("Azure OpenAI 需要配置 LLM_BASE_URL")
+        return AzureChatOpenAI(
+            azure_endpoint=configured_base_url,
+            azure_deployment=model,
+            api_version=str(config.get("api_version") or "2024-10-21"),
             api_key=api_key,
-            base_url=settings.LLM_BASE_URL,
             **common_kwargs,
         )
 
     elif provider == LLMProvider.LOCAL:
         # LOCAL 统一走 Ollama 的 OpenAI 兼容端点，与 model_selector 保持一致
-        ollama_base = settings.OLLAMA_BASE_URL.rstrip("/")
-        base_url = settings.LLM_BASE_URL or f"{ollama_base}/v1"
+        ollama_base = str(config["ollama_base_url"]).rstrip("/")
+        base_url = configured_base_url or f"{ollama_base}/v1"
         return ChatOpenAI(
-            model=settings.LLM_MODEL,
+            model=model,
             api_key=SecretStr("not-needed"),
             base_url=base_url,
             **common_kwargs,
@@ -97,8 +106,9 @@ def get_llm(
             from langchain_anthropic import ChatAnthropic
 
             return ChatAnthropic(
-                model=settings.LLM_MODEL,  # type: ignore[call-arg]  # langchain 1.x 存根滞后，运行时接受 model
+                model=model,  # type: ignore[call-arg]  # langchain 1.x 存根滞后，运行时接受 model
                 api_key=api_key,
+                **({"base_url": configured_base_url} if configured_base_url else {}),
                 **common_kwargs,
             )
         except ImportError as err:

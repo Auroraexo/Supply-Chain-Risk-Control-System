@@ -5,7 +5,7 @@
 """
 
 from functools import lru_cache
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-4o-mini"
     LLM_API_KEY: str = ""
     LLM_BASE_URL: Optional[str] = None
+    LLM_API_VERSION: str = "2024-10-21"
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 4000
     LLM_TIMEOUT: int = 30
@@ -107,3 +108,34 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """获取全局配置单例。"""
     return Settings()
+
+
+# Settings changed from the admin UI are intentionally process-local until a
+# persistent settings store is introduced. Keeping the override in this module
+# makes it visible to every LLM caller instead of only to the settings router.
+_runtime_llm_config: dict[str, Any] = {}
+
+
+def get_effective_llm_config() -> dict[str, Any]:
+    """Return environment defaults merged with the latest UI configuration."""
+    settings = get_settings()
+    config: dict[str, Any] = {
+        "provider": settings.LLM_PROVIDER,
+        "model": settings.LLM_MODEL,
+        "api_key": settings.LLM_API_KEY,
+        "base_url": settings.LLM_BASE_URL or "",
+        "api_version": settings.LLM_API_VERSION,
+        "ollama_base_url": settings.OLLAMA_BASE_URL,
+        "temperature": settings.LLM_TEMPERATURE,
+        "max_tokens": settings.LLM_MAX_TOKENS,
+        "mock_mode": settings.LLM_MOCK_MODE,
+        "smart_routing": settings.MODEL_SELECTOR_ENABLED,
+    }
+    config.update({key: value for key, value in _runtime_llm_config.items() if value is not None})
+    return config
+
+
+def set_runtime_llm_config(config: dict[str, Any]) -> None:
+    """Apply a validated UI configuration to the current process."""
+    _runtime_llm_config.clear()
+    _runtime_llm_config.update(config)

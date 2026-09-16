@@ -8,6 +8,9 @@ class LLMConfigRequest(BaseModel):
     provider: str = Field(default="openai", description="LLM提供商")
     model: str = Field(default="gpt-4o-mini", description="模型名称")
     api_key: str = Field(default="", description="API密钥")
+    base_url: str = Field(default="", description="Provider API 基础地址")
+    api_version: str = Field(default="2024-10-21", description="Azure OpenAI API 版本")
+    ollama_base_url: str = Field(default="http://localhost:11434", description="Ollama 服务地址")
     temperature: float = Field(default=0.7, ge=0, le=2, description="温度参数")
     max_tokens: int = Field(default=4096, ge=1, le=128000, description="最大Token数")
     mock_mode: bool = Field(default=False, description="Mock模式")
@@ -19,6 +22,9 @@ class LLMConfigResponse(BaseModel):
     provider: str
     model: str
     api_key: str
+    base_url: str = ""
+    api_version: str = "2024-10-21"
+    ollama_base_url: str = "http://localhost:11434"
     temperature: float
     max_tokens: int
     mock_mode: bool
@@ -30,6 +36,9 @@ class LLMTestRequest(BaseModel):
     provider: str = "openai"
     model: str = "gpt-4o-mini"
     api_key: str = ""
+    base_url: str = ""
+    api_version: str = "2024-10-21"
+    ollama_base_url: str = "http://localhost:11434"
 
 
 class LLMTestResponse(BaseModel):

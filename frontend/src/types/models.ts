@@ -126,6 +126,7 @@ export interface LLMConfig {
   model: string;
   api_key: string;
   base_url: string;
+  api_version: string;
   ollama_base_url: string;
   temperature: number;
   max_tokens: number;
