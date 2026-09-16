@@ -143,13 +143,26 @@ class RiskService:
 
         # ── 阶段 4：提取并持久化分析结果 ──
         t4 = time.monotonic()
+        # Agent 流程可能提前路由到人工审核（数据质量差/重试超限），
+        # 此时 Analyst 未运行，risk_level/risk_score 保持初始的 None；
+        # state 初始化时键已存在，dict.get 的默认值不会生效，必须显式判 None。
+        _raw_level = final_state.get("risk_level")
+        _raw_score = final_state.get("risk_score")
+        if _raw_level is None:
+            logger.warning(
+                "risk_service.missing_risk_level",
+                request_id=request_id,
+                agent_status=final_state.get("status"),
+                reason=final_state.get("human_review_reason"),
+                error=final_state.get("error_message"),
+            )
         analysis = AnalysisResult(
             request_id=request_id,
             raw_data_id=raw_data_id,
-            risk_score=final_state.get("risk_score", 0.0),
-            risk_level=RiskLevel(final_state.get("risk_level", "low")),
-            anomaly_tags=final_state.get("anomaly_tags", []),
-            reasoning=final_state.get("analysis_reasoning", ""),
+            risk_score=float(_raw_score) if _raw_score is not None else None,
+            risk_level=RiskLevel(_raw_level) if _raw_level is not None else None,
+            anomaly_tags=final_state.get("anomaly_tags") or [],
+            reasoning=final_state.get("analysis_reasoning") or "",
             facts_summary={
                 "source_id": source_id,
                 "source_type": source_type,
@@ -165,7 +178,7 @@ class RiskService:
             request_id=request_id,
             analysis_id=analysis.id,
             risk_score=analysis.risk_score,
-            risk_level=analysis.risk_level.value,
+            risk_level=analysis.risk_level.value if analysis.risk_level else None,
             elapsed_ms=stage_ms["persist_analysis"],
         )
 
@@ -184,9 +197,9 @@ class RiskService:
             request_id=request_id,
             analysis_id=analysis.id,
             decision=decision_enum,
-            confidence=final_state.get("confidence", 0.0),
-            explanation=final_state.get("decision_explanation", ""),
-            decision_path=final_state.get("decision_path", []),
+            confidence=final_state.get("confidence") or 0.0,
+            explanation=final_state.get("decision_explanation") or "",
+            decision_path=final_state.get("decision_path") or [],
             reflection_passed=reflection.get("passed", True),
         )
         await self.decision_repo.create(decision)
@@ -202,7 +215,10 @@ class RiskService:
 
         # ── 阶段 6：更新原始数据状态 ──
         t6 = time.monotonic()
-        quality_score = final_state.get("data_quality_score", 0.95)
+        # Scout 异常中断时质量分为 None，回退到 0.0 而非虚假的 0.95
+        quality_score = final_state.get("data_quality_score")
+        if quality_score is None:
+            quality_score = 0.0
         await self.raw_data_repo.update_status(raw_data_id, RawDataStatus.PROCESSED, quality_score=quality_score)
         stage_ms["update_raw_data"] = round((time.monotonic() - t6) * 1000, 1)
         logger.info(
@@ -263,7 +279,7 @@ class RiskService:
             request_id=request_id,
             raw_data_id=raw_data_id,
             risk_score=analysis.risk_score,
-            risk_level=analysis.risk_level.value,
+            risk_level=analysis.risk_level.value if analysis.risk_level else None,
             decision=decision.decision.value,
             confidence=decision.confidence,
             agent_status=agent_status,
@@ -275,7 +291,7 @@ class RiskService:
             "request_id": request_id,
             "status": "completed",
             "risk_score": analysis.risk_score,
-            "risk_level": analysis.risk_level.value,
+            "risk_level": analysis.risk_level.value if analysis.risk_level else None,
             "anomaly_tags": analysis.anomaly_tags or [],
             "analysis_reasoning": analysis.reasoning,
             "decision": decision.decision.value,

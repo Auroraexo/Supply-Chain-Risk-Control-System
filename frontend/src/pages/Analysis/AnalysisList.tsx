@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { RiskLevelBadge } from '@/components/business/RiskLevelBadge';
 import { AutomationModal } from '@/components/business/AutomationModal';
+import { NewAnalysisModal } from '@/components/business/NewAnalysisModal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import Empty from '@/components/Empty';
@@ -23,6 +24,7 @@ export function AnalysisList() {
   const [riskFilter, setRiskFilter] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
   const [autoOpen, setAutoOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
   const { addToast } = useToastStore();
   const navigate = useNavigate();
 
@@ -50,7 +52,7 @@ export function AnalysisList() {
   });
 
   const handleRunAnalysis = () => {
-    addToast({ type: 'info', title: '分析任务已提交', message: '正在排队处理中...' });
+    setNewOpen(true);
   };
 
   return (
@@ -67,6 +69,7 @@ export function AnalysisList() {
         </>} />
 
       <AutomationModal mode="analysis" open={autoOpen} onClose={() => setAutoOpen(false)} onDone={fetchData} />
+      <NewAnalysisModal open={newOpen} onClose={() => setNewOpen(false)} onDone={fetchData} />
 
       <Card padding="none">
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center">

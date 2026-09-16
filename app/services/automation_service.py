@@ -42,12 +42,13 @@ class AutomationService:
         flow_start = time.monotonic()
         repo = RawDataRepository(self.db)
         pending = await repo.get_pending(limit=max_items)
+        # 查询后立即物化为标量：analyze() 内部会 commit/rollback 使 ORM 对象过期，
+        # 若循环中再访问过期对象的属性会触发隐式刷新（greenlet/事件循环错误）。
+        pending_ids: list[tuple[str, str | None]] = [(raw.id, raw.source_id) for raw in pending]
 
         items: list[dict] = []
         risk_service = RiskService(self.db)
-        for raw in pending:
-            # 先取出标量值：analyze 内部会 commit/rollback 导致 ORM 对象过期
-            raw_id, source_id = raw.id, raw.source_id
+        for raw_id, source_id in pending_ids:
             try:
                 result = await risk_service.analyze(raw_id)
                 items.append({
@@ -78,13 +79,13 @@ class AutomationService:
         completed = sum(1 for i in items if i["status"] == "completed")
         logger.info(
             "automation.auto_analysis_done",
-            total=len(pending),
+            total=len(pending_ids),
             completed=completed,
             failed=len(items) - completed,
             elapsed_ms=round((time.monotonic() - flow_start) * 1000, 1),
         )
         return {
-            "total": len(pending),
+            "total": len(pending_ids),
             "completed": completed,
             "failed": len(items) - completed,
             "items": items,
