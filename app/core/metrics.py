@@ -62,10 +62,12 @@ DECISIONS_TOTAL = Counter(
 )
 
 
-def record_llm_usage(agent_name: str, llm, resp, logger=None) -> None:
+def record_llm_usage(agent_name: str, llm, resp, logger=None, state: dict | None = None) -> None:
     """记录单次 LLM 调用的 token 用量与调用计数。
 
     供各 Agent 节点在 llm.ainvoke 后调用；指标采集失败不影响业务。
+    传入 state 时同时把累计 token 写回 state["token_usage"]，
+    供决策图结束时持久化到 agent_execution_logs。
     """
     try:
         usage = getattr(resp, "usage_metadata", None) or {}
@@ -77,6 +79,14 @@ def record_llm_usage(agent_name: str, llm, resp, logger=None) -> None:
             AGENT_TOKENS_TOTAL.labels(agent_name=agent_name, token_type="completion").inc(completion_tokens)
         model = getattr(llm, "model_name", None) or getattr(llm, "model", "") or "unknown"
         LLM_CALLS_TOTAL.labels(provider="default", model=str(model), status="success").inc()
+
+        if state is not None:
+            acc = state.get("token_usage") or {}
+            state["token_usage"] = {
+                "prompt_tokens": int(acc.get("prompt_tokens") or 0) + int(prompt_tokens or 0),
+                "completion_tokens": int(acc.get("completion_tokens") or 0) + int(completion_tokens or 0),
+            }
+            state["_llm_model"] = str(model)
     except Exception:
         if logger:
             logger.debug("metrics.llm_usage_record_failed", agent=agent_name)

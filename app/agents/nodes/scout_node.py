@@ -84,6 +84,7 @@ async def scout_node(state: AgentState) -> AgentState:
             quality_score=quality_score,
             missing_fields=missing_fields,
             facts=structured_facts,
+            state=state,
         )
 
         if quality_score < 0.5:
@@ -141,6 +142,7 @@ async def _generate_quality_notes(
     quality_score: float,
     missing_fields: list[str],
     facts: dict,
+    state: dict | None = None,
 ) -> str:
     """用 LLM 生成数据质量语义说明，失败时静默回退到规则文本。
 
@@ -166,7 +168,7 @@ async def _generate_quality_notes(
         ]
         t_llm = time.monotonic()
         resp = await llm.ainvoke(messages)
-        _record_llm_usage("scout", llm, resp)
+        _record_llm_usage("scout", llm, resp, state=state)
         content = getattr(resp, "content", "")
         logger.info(
             "scout.quality_notes_llm",

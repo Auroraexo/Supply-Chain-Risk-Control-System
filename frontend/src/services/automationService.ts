@@ -53,8 +53,11 @@ export interface AutoRulesResult {
   source: 'llm' | 'fallback';
 }
 
+// AI 自动化含多次 LLM 推理（本地 Ollama 单次 15s+），给足超时
+const AUTOMATION_TIMEOUT_MS = 600_000; // 10 分钟
+
 export const automationService = {
-  runAnalysis: (maxItems: number) => post<AutoAnalysisResult>('/automation/run-analysis', { max_items: maxItems }),
-  runReview: (confidenceThreshold: number) => post<AutoReviewResult>('/automation/run-review', { confidence_threshold: confidenceThreshold }),
-  runRules: (apply: boolean) => post<AutoRulesResult>('/automation/run-rules', { apply }),
+  runAnalysis: (maxItems: number) => post<AutoAnalysisResult>('/automation/run-analysis', { max_items: maxItems }, AUTOMATION_TIMEOUT_MS),
+  runReview: (confidenceThreshold: number) => post<AutoReviewResult>('/automation/run-review', { confidence_threshold: confidenceThreshold }, AUTOMATION_TIMEOUT_MS),
+  runRules: (apply: boolean) => post<AutoRulesResult>('/automation/run-rules', { apply }, AUTOMATION_TIMEOUT_MS),
 };

@@ -79,6 +79,7 @@ async def decider_node(state: AgentState) -> AgentState:
             risk_level=risk_level,
             confidence=confidence,
             decision_source=decision_source,
+            state=state,
         )
         state["status"] = DecisionStatus.COMPLETED
         state["completed_at"] = datetime.now().isoformat()
@@ -270,6 +271,7 @@ async def _generate_explanation(
     risk_level: str,
     confidence: float,
     decision_source: str,
+    state: dict | None = None,
 ) -> str:
     """用 LLM 生成决策解释，失败时回退到规则文本。"""
     fallback = (
@@ -294,7 +296,7 @@ async def _generate_explanation(
         ]
         t_llm = time.monotonic()
         resp = await llm.ainvoke(messages)
-        _record_llm_usage("decider", llm, resp)
+        _record_llm_usage("decider", llm, resp, state=state)
         content = getattr(resp, "content", "")
         logger.info(
             "decider.explanation_llm",

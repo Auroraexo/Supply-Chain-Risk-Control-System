@@ -93,6 +93,7 @@ async def reflection_node(state: AgentState) -> AgentState:
             suggestions=suggestions,
             facts=facts,
             anomaly_tags=anomaly_tags,
+            state=state,
         )
         state["reflection_result"] = {
             "passed": passed,
@@ -149,6 +150,7 @@ async def _generate_review_notes(
     suggestions: list[str],
     facts: dict,
     anomaly_tags: list[str],
+    state: dict | None = None,
 ) -> str:
     """用 LLM 生成反思复核备注，失败时回退到规则文本。"""
     fallback = f"风险评分 {risk_score}，校验{'通过' if passed else '未通过'}"
@@ -170,7 +172,7 @@ async def _generate_review_notes(
         ]
         t_llm = time.monotonic()
         resp = await llm.ainvoke(messages)
-        _record_llm_usage("reflection", llm, resp)
+        _record_llm_usage("reflection", llm, resp, state=state)
         content = getattr(resp, "content", "")
         logger.info(
             "reflection.review_notes_llm",

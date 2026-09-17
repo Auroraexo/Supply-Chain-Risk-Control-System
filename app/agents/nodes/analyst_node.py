@@ -103,6 +103,7 @@ async def analyst_node(state: AgentState) -> AgentState:
             level=level,
             anomaly_tags=state["anomaly_tags"],
             facts=facts,
+            state=state,
         )
 
         if level in (RiskLevel.HIGH.value, RiskLevel.CRITICAL.value):
@@ -213,6 +214,7 @@ async def _generate_reasoning(
     level: str,
     anomaly_tags: list[str],
     facts: dict,
+    state: dict | None = None,
 ) -> str:
     """用 LLM 生成分析推理，失败时静默回退到规则文本。
 
@@ -237,7 +239,7 @@ async def _generate_reasoning(
         ]
         t_llm = time.monotonic()
         resp = await llm.ainvoke(messages)
-        _record_llm_usage("analyst", llm, resp)
+        _record_llm_usage("analyst", llm, resp, state=state)
         content = getattr(resp, "content", "")
         logger.info(
             "analyst.reasoning_llm",

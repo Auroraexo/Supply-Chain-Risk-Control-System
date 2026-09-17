@@ -53,8 +53,15 @@ export async function get<T>(url: string, params?: Record<string, unknown>): Pro
   return response.data;
 }
 
-export async function post<T>(url: string, data?: unknown): Promise<ApiResponse<T>> {
-  const response = await api.post<ApiResponse<T>>(url, data);
+/**
+ * post 请求。
+ * @param timeoutMs 可选超时覆盖：AI 自动化等长耗时接口传更大的值
+ *   （本地 Ollama 推理单次可达 15s+，一次自动化含多次 LLM 调用）。
+ */
+export async function post<T>(url: string, data?: unknown, timeoutMs?: number): Promise<ApiResponse<T>> {
+  const response = await api.post<ApiResponse<T>>(url, data, {
+    ...(timeoutMs ? { timeout: timeoutMs } : {}),
+  });
   return response.data;
 }
 

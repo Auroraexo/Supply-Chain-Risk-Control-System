@@ -8,6 +8,7 @@ export const analysisService = {
     return extractPaginated<AnalysisResult>(res);
   },
   getById: (requestId: string) => get<AnalysisResult>(`/risk/analyze/${requestId}`),
+  // Agent 分析含多次 LLM 推理（本地 Ollama 单次 15s+），给足超时
   run: (rawDataId: string, forceReanalyze = false) =>
-    post<AnalysisResult>('/risk/analyze', { raw_data_id: rawDataId, force_reanalyze: forceReanalyze }),
+    post<AnalysisResult>('/risk/analyze', { raw_data_id: rawDataId, force_reanalyze: forceReanalyze }, 600_000),
 };

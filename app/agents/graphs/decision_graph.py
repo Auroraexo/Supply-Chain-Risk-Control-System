@@ -32,17 +32,68 @@ def _route_elapsed(state: AgentState) -> float:
     return round((time.monotonic() - start) * 1000, 1) if start else 0.0
 
 
+def _persist_execution_log(request_id: str, node: str, state: dict, elapsed_ms: float, error: str | None) -> None:
+    """把节点执行记录写入 agent_execution_logs（失败仅告警，不影响主流程）。
+
+    独立会话写入：图执行中的会话会 rollback/expire，不能复用。
+    """
+    try:
+        import asyncio
+
+        from app.core.database import get_session_factory
+        from app.models.agent_execution_log import AgentExecutionLog
+
+        # token 用量：节点执行期间可能更新 state["token_usage"]
+        usage = state.get("token_usage") or {}
+        prompt_tokens = int(usage.get("prompt_tokens") or 0)
+        completion_tokens = int(usage.get("completion_tokens") or 0)
+
+        # 摘要输出：取节点最有代表性的产物
+        output_summary = (
+            state.get("analysis_reasoning")
+            or state.get("decision_explanation")
+            or state.get("data_quality_notes")
+            or state.get("human_review_reason")
+            or ""
+        )
+
+        async def _write() -> None:
+            factory = get_session_factory()
+            async with factory() as session:
+                session.add(AgentExecutionLog(
+                    request_id=request_id,
+                    agent_name=node,
+                    node_name=node,
+                    input_state=None,  # 原始状态含大量中间体，不入库
+                    output_state={"summary": str(output_summary)[:2000]} if output_summary else None,
+                    llm_model=str(state.get("_llm_model") or "") or None,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    latency_ms=int(elapsed_ms),
+                    error_message=error,
+                ))
+                await session.commit()
+
+        # 图运行在事件循环内，直接调度写入任务
+        asyncio.get_running_loop().create_task(_write())
+    except Exception as e:  # noqa: BLE001 - 日志埋点失败不影响决策主流程
+        logger.warning("graph.execution_log_failed", node=node, error=str(e))
+
+
 def _timed_node(name: str, node_fn):
-    """节点计时包装：记录单节点耗时，并累积到 state["node_timings"] 供流程结束汇总。"""
+    """节点计时包装：记录单节点耗时，写入执行日志，并累积到 state["node_timings"] 供流程结束汇总。"""
     async def wrapper(state):
         node_t0 = time.monotonic()
-        logger.info("graph.node_start", node=name, request_id=state.get("request_id"))
+        request_id = str(state.get("request_id") or "unknown")
+        logger.info("graph.node_start", node=name, request_id=request_id)
         try:
             result = await node_fn(state)
-        except Exception:
+        except Exception as e:
             AGENT_CALLS_TOTAL.labels(
                 agent_name=name, node_name=name, status="error"
             ).inc()
+            elapsed_err = round((time.monotonic() - node_t0) * 1000, 1)
+            _persist_execution_log(request_id, name, dict(state), elapsed_err, str(e))
             raise
         elapsed = round((time.monotonic() - node_t0) * 1000, 1)
         AGENT_LATENCY_SECONDS.labels(agent_name=name, node_name=name).observe(elapsed / 1000)
@@ -50,10 +101,11 @@ def _timed_node(name: str, node_fn):
         timings = list(result.get("node_timings") or [])
         timings.append({"node": name, "elapsed_ms": elapsed})
         result["node_timings"] = timings
+        _persist_execution_log(request_id, name, dict(result), elapsed, None)
         logger.info(
             "graph.node_complete",
             node=name,
-            request_id=state.get("request_id"),
+            request_id=request_id,
             elapsed_ms=elapsed,
             sequence=len(timings),
         )
