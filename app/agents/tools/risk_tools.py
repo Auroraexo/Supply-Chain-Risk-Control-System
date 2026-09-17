@@ -12,14 +12,33 @@ logger = structlog.get_logger(__name__)
 def calculate_risk_score(delay_days: int, price_deviation: float, supplier_rating: float, historical_incidents: int) -> dict:
     """计算供应链风险评分。
 
+    输入容错：字符串数值自动转换；负值钳制为 0；供应商评分夹在 0-5。
+    评分下限钳制为 0、上限封顶 100。
+
     Args:
         delay_days: 延迟天数
         price_deviation: 价格偏差百分比
         supplier_rating: 供应商评分 (0-5)
         historical_incidents: 历史事故次数
     """
+    def _num(v, default: float, minimum: float | None = 0.0, maximum: float | None = None) -> float:
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            x = default
+        if minimum is not None:
+            x = max(minimum, x)
+        if maximum is not None:
+            x = min(maximum, x)
+        return x
+
+    delay_days = _num(delay_days, 0)
+    price_deviation = _num(price_deviation, 0)
+    supplier_rating = _num(supplier_rating, 3.0, minimum=0.0, maximum=5.0)
+    historical_incidents = _num(historical_incidents, 0)
+
     score = delay_days * 5.0 + price_deviation * 3.0 + (5 - supplier_rating) * 4.0 + historical_incidents * 10.0
-    score = min(score, 100.0)
+    score = max(0.0, min(score, 100.0))
     level = "low"
     if score > 70:
         level = "critical"

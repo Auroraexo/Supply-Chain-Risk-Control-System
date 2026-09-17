@@ -1,0 +1,919 @@
+{
+  "meta": {
+    "name": "supply-chain-agent-eval-set",
+    "version": "1.0.0",
+    "description": "Agent 评估集：期望输出来自 risk_tools.calculate_risk_score 的确定性公式（delay×5 + price_deviation×3 + (5-rating)×4 + incidents×10，封顶 100；分级线 low≤30 < medium≤50 < high≤70 < critical）。覆盖四档风险等级、边界值、缺失字段鲁棒性场景。",
+    "scoring_formula": "score = min(100, delay_days*5 + price_deviation*3 + (5-supplier_rating)*4 + historical_incidents*10)"
+  },
+  "cases": [
+    {
+      "case_id": "eval_001",
+      "description": "正常订单-低风险场景",
+      "input": {
+        "order_id": "ORD-E001",
+        "supplier_id": "SUP-088",
+        "amount": 50000,
+        "delay_days": 0,
+        "price_deviation": 0,
+        "supplier_rating": 4.5,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": [],
+        "must_not_have_tags": [
+          "delay",
+          "price_anomaly",
+          "supplier_risk"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_002",
+      "description": "轻微延迟但仍低风险",
+      "input": {
+        "order_id": "ORD-E002",
+        "supplier_id": "SUP-088",
+        "amount": 30000,
+        "delay_days": 2,
+        "price_deviation": 2,
+        "supplier_rating": 4.8,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": [
+          "delay"
+        ],
+        "must_not_have_tags": [
+          "fraud_suspected"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_003",
+      "description": "延迟+小幅价格偏差,低分临界",
+      "input": {
+        "order_id": "ORD-E003",
+        "supplier_id": "SUP-090",
+        "amount": 45000,
+        "delay_days": 3,
+        "price_deviation": 3,
+        "supplier_rating": 4.5,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_004",
+      "description": "优质供应商零异常",
+      "input": {
+        "order_id": "ORD-E004",
+        "supplier_id": "SUP-100",
+        "amount": 80000,
+        "delay_days": 0,
+        "price_deviation": 0,
+        "supplier_rating": 5.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": []
+      }
+    },
+    {
+      "case_id": "eval_005",
+      "description": "无延迟但供应商评分一般",
+      "input": {
+        "order_id": "ORD-E005",
+        "supplier_id": "SUP-095",
+        "amount": 60000,
+        "delay_days": 0,
+        "price_deviation": 1,
+        "supplier_rating": 4.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": []
+      }
+    },
+    {
+      "case_id": "eval_006",
+      "description": "medium 临界-评分刚好过 30 线",
+      "input": {
+        "order_id": "ORD-E006",
+        "supplier_id": "SUP-077",
+        "amount": 55000,
+        "delay_days": 3,
+        "price_deviation": 3,
+        "supplier_rating": 3.7,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": [
+          "delay"
+        ],
+        "note": "修正:公式分 29.2 为 low(标注原误为 medium)"
+      }
+    },
+    {
+      "case_id": "eval_007",
+      "description": "中等延迟+评分下滑",
+      "input": {
+        "order_id": "ORD-E007",
+        "supplier_id": "SUP-070",
+        "amount": 120000,
+        "delay_days": 5,
+        "price_deviation": 2,
+        "supplier_rating": 3.5,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "medium",
+        "risk_score_range": [
+          30,
+          50
+        ],
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_008",
+      "description": "价格偏差主导的中风险",
+      "input": {
+        "order_id": "ORD-E008",
+        "supplier_id": "SUP-072",
+        "amount": 90000,
+        "delay_days": 1,
+        "price_deviation": 12,
+        "supplier_rating": 4.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "medium",
+        "risk_score_range": [
+          30,
+          50
+        ],
+        "must_have_tags": [],
+        "note": "修正:price=12 未超过 15 的标签阈值,不应有 price_anomaly 标签"
+      }
+    },
+    {
+      "case_id": "eval_009",
+      "description": "一次历史事故+延迟",
+      "input": {
+        "order_id": "ORD-E009",
+        "supplier_id": "SUP-068",
+        "amount": 70000,
+        "delay_days": 2,
+        "price_deviation": 3,
+        "supplier_rating": 4.2,
+        "historical_incidents": 1
+      },
+      "expected_output": {
+        "risk_level": "medium",
+        "risk_score_range": [
+          30,
+          50
+        ],
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_010",
+      "description": "供应商风险主导",
+      "input": {
+        "order_id": "ORD-E010",
+        "supplier_id": "SUP-065",
+        "amount": 110000,
+        "delay_days": 0,
+        "price_deviation": 2,
+        "supplier_rating": 2.5,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": [
+          "supplier_risk"
+        ],
+        "note": "修正:公式分 16 为 low(supplier_risk 标签 rating<3 仍会打上)"
+      }
+    },
+    {
+      "case_id": "eval_011",
+      "description": "high 临界-多因子叠加",
+      "input": {
+        "order_id": "ORD-E011",
+        "supplier_id": "SUP-060",
+        "amount": 150000,
+        "delay_days": 6,
+        "price_deviation": 5,
+        "supplier_rating": 3.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          50,
+          70
+        ],
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_012",
+      "description": "严重延迟+价格异常",
+      "input": {
+        "order_id": "ORD-E012",
+        "supplier_id": "SUP-058",
+        "amount": 200000,
+        "delay_days": 8,
+        "price_deviation": 8,
+        "supplier_rating": 3.8,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          50,
+          70
+        ],
+        "must_have_tags": [
+          "delay"
+        ],
+        "note": "修正:price=8 未超 15 阈值,仅 delay 标签"
+      }
+    },
+    {
+      "case_id": "eval_013",
+      "description": "历史事故多次+评分差",
+      "input": {
+        "order_id": "ORD-E013",
+        "supplier_id": "SUP-055",
+        "amount": 160000,
+        "delay_days": 3,
+        "price_deviation": 4,
+        "supplier_rating": 2.8,
+        "historical_incidents": 2
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          50,
+          70
+        ],
+        "must_have_tags": [
+          "supplier_risk"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_014",
+      "description": "价格偏差 20% 主导高风险",
+      "input": {
+        "order_id": "ORD-E014",
+        "supplier_id": "SUP-052",
+        "amount": 300000,
+        "delay_days": 0,
+        "price_deviation": 20,
+        "supplier_rating": 4.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          50,
+          70
+        ],
+        "must_have_tags": [
+          "price_anomaly"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_015",
+      "description": "延迟 9 天+评分 3.0",
+      "input": {
+        "order_id": "ORD-E015",
+        "supplier_id": "SUP-050",
+        "amount": 180000,
+        "delay_days": 9,
+        "price_deviation": 1,
+        "supplier_rating": 3.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          50,
+          70
+        ],
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_016",
+      "description": "灾难场景-全因子恶化",
+      "input": {
+        "order_id": "ORD-E016",
+        "supplier_id": "SUP-001",
+        "amount": 500000,
+        "delay_days": 15,
+        "price_deviation": 25,
+        "supplier_rating": 1.5,
+        "historical_incidents": 3
+      },
+      "expected_output": {
+        "risk_level": "critical",
+        "risk_score_range": [
+          70,
+          100
+        ],
+        "must_have_tags": [
+          "delay",
+          "price_anomaly",
+          "supplier_risk"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_017",
+      "description": "极长延迟主导 critical",
+      "input": {
+        "order_id": "ORD-E017",
+        "supplier_id": "SUP-002",
+        "amount": 400000,
+        "delay_days": 18,
+        "price_deviation": 0,
+        "supplier_rating": 4.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "critical",
+        "risk_score_range": [
+          70,
+          100
+        ],
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_018",
+      "description": "评分极差+多次事故",
+      "input": {
+        "order_id": "ORD-E018",
+        "supplier_id": "SUP-003",
+        "amount": 250000,
+        "delay_days": 2,
+        "price_deviation": 5,
+        "supplier_rating": 1.0,
+        "historical_incidents": 3
+      },
+      "expected_output": {
+        "risk_level": "critical",
+        "risk_score_range": [
+          70,
+          100
+        ],
+        "must_have_tags": [
+          "supplier_risk"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_019",
+      "description": "封顶验证-理论分超 100",
+      "input": {
+        "order_id": "ORD-E019",
+        "supplier_id": "SUP-004",
+        "amount": 600000,
+        "delay_days": 30,
+        "price_deviation": 50,
+        "supplier_rating": 1.0,
+        "historical_incidents": 5
+      },
+      "expected_output": {
+        "risk_level": "critical",
+        "risk_score_range": [
+          99,
+          100
+        ],
+        "must_have_tags": [
+          "delay",
+          "price_anomaly",
+          "supplier_risk"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_020",
+      "description": "critical 临界-刚好过 70 线",
+      "input": {
+        "order_id": "ORD-E020",
+        "supplier_id": "SUP-005",
+        "amount": 220000,
+        "delay_days": 10,
+        "price_deviation": 3,
+        "supplier_rating": 2.5,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          50,
+          70
+        ],
+        "must_have_tags": [
+          "delay",
+          "supplier_risk"
+        ],
+        "note": "修正:公式分 69 为 high(标注原误为 critical)"
+      }
+    },
+    {
+      "case_id": "eval_021",
+      "description": "鲁棒性-所有可选项缺失",
+      "input": {
+        "order_id": "ORD-E021",
+        "supplier_id": "SUP-088"
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": [],
+        "robustness": true,
+        "note": "缺失 delay/price/rating/incidents 时应按默认值 0/0/3.0/0 计算=15 分 low"
+      }
+    },
+    {
+      "case_id": "eval_022",
+      "description": "鲁棒性-仅延迟字段",
+      "input": {
+        "order_id": "ORD-E022",
+        "supplier_id": "SUP-088",
+        "delay_days": 4
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": [
+          "delay"
+        ],
+        "robustness": true,
+        "note": "20+5=25 分 low"
+      }
+    },
+    {
+      "case_id": "eval_023",
+      "description": "鲁棒性-仅历史事故字段",
+      "input": {
+        "order_id": "ORD-E023",
+        "supplier_id": "SUP-088",
+        "historical_incidents": 2
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "robustness": true,
+        "note": "20 分 low"
+      }
+    },
+    {
+      "case_id": "eval_024",
+      "description": "鲁棒性-数值为字符串类型",
+      "input": {
+        "order_id": "ORD-E024",
+        "supplier_id": "SUP-088",
+        "delay_days": "6",
+        "price_deviation": "5",
+        "supplier_rating": "3.0",
+        "historical_incidents": "0"
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          50,
+          70
+        ],
+        "robustness": true,
+        "note": "修正:字符串 price=5 未超 15 阈值,仅 delay 标签",
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_025",
+      "description": "鲁棒性-负值输入(异常数据)",
+      "input": {
+        "order_id": "ORD-E025",
+        "supplier_id": "SUP-088",
+        "delay_days": -5,
+        "price_deviation": -10,
+        "supplier_rating": 4.0,
+        "historical_incidents": -2
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "robustness": true,
+        "note": "负值不应产生负分,应钳制到 low"
+      }
+    },
+    {
+      "case_id": "eval_026",
+      "description": "鲁棒性-超大数值输入",
+      "input": {
+        "order_id": "ORD-E026",
+        "supplier_id": "SUP-088",
+        "delay_days": 9999,
+        "price_deviation": 9999,
+        "supplier_rating": 0,
+        "historical_incidents": 999
+      },
+      "expected_output": {
+        "risk_level": "critical",
+        "risk_score_range": [
+          99,
+          100
+        ],
+        "robustness": true,
+        "note": "必须封顶 100,不得溢出"
+      }
+    },
+    {
+      "case_id": "eval_027",
+      "description": "边界验证-评分正好 30(low 上界)",
+      "input": {
+        "order_id": "ORD-E027",
+        "supplier_id": "SUP-088",
+        "delay_days": 6,
+        "price_deviation": 0,
+        "supplier_rating": 5.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          29,
+          31
+        ],
+        "boundary": true,
+        "note": "30 分按规则是 low(>30 才 medium)"
+      }
+    },
+    {
+      "case_id": "eval_028",
+      "description": "边界验证-评分正好 50(high 上界)",
+      "input": {
+        "order_id": "ORD-E028",
+        "supplier_id": "SUP-088",
+        "delay_days": 10,
+        "price_deviation": 0,
+        "supplier_rating": 5.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "medium",
+        "risk_score_range": [
+          49,
+          51
+        ],
+        "boundary": true,
+        "note": "50 分按规则是 medium(>50 才 high)"
+      }
+    },
+    {
+      "case_id": "eval_029",
+      "description": "边界验证-评分正好 70(critical 上界)",
+      "input": {
+        "order_id": "ORD-E029",
+        "supplier_id": "SUP-088",
+        "delay_days": 14,
+        "price_deviation": 0,
+        "supplier_rating": 5.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          69,
+          71
+        ],
+        "boundary": true,
+        "note": "70 分按规则是 high(>70 才 critical)"
+      }
+    },
+    {
+      "case_id": "eval_030",
+      "description": "现实样本-华东可疑供应商(高投诉率)",
+      "input": {
+        "order_id": "ORD-E030",
+        "supplier_id": "SUP-XYZ-90210",
+        "amount": 5800000,
+        "delay_days": 7,
+        "price_deviation": 8,
+        "supplier_rating": 1.6,
+        "historical_incidents": 1
+      },
+      "expected_output": {
+        "risk_level": "critical",
+        "risk_score_range": [
+          70,
+          100
+        ],
+        "must_have_tags": [
+          "delay",
+          "supplier_risk"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_031",
+      "description": "现实样本-东莞精密电子延迟事件",
+      "input": {
+        "order_id": "ORD-E031",
+        "supplier_id": "SUP-DG-8801",
+        "amount": 250000,
+        "delay_days": 8,
+        "price_deviation": 4,
+        "supplier_rating": 3.8,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          50,
+          70
+        ],
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_032",
+      "description": "现实样本-主控芯片库存告急",
+      "input": {
+        "order_id": "ORD-E032",
+        "supplier_id": "SUP-IC-5566",
+        "amount": 880000,
+        "delay_days": 4,
+        "price_deviation": 18,
+        "supplier_rating": 4.2,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "critical",
+        "risk_score_range": [
+          70,
+          100
+        ],
+        "must_have_tags": [
+          "delay",
+          "price_anomaly"
+        ],
+        "note": "修正:公式分 77.2 为 critical(标注原误为 medium)"
+      }
+    },
+    {
+      "case_id": "eval_033",
+      "description": "大额低风险-高价值订单正常履约",
+      "input": {
+        "order_id": "ORD-E033",
+        "supplier_id": "SUP-GOLD",
+        "amount": 2000000,
+        "delay_days": 0,
+        "price_deviation": 0,
+        "supplier_rating": 4.9,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": []
+      }
+    },
+    {
+      "case_id": "eval_034",
+      "description": "中风险-新供应商首单轻微异常",
+      "input": {
+        "order_id": "ORD-E034",
+        "supplier_id": "SUP-NEW-2026",
+        "amount": 85000,
+        "delay_days": 3,
+        "price_deviation": 6,
+        "supplier_rating": 3.5,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "medium",
+        "risk_score_range": [
+          30,
+          50
+        ],
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_035",
+      "description": "高风险-价格偏差 16% 刚过标签线",
+      "input": {
+        "order_id": "ORD-E035",
+        "supplier_id": "SUP-051",
+        "amount": 130000,
+        "delay_days": 2,
+        "price_deviation": 16,
+        "supplier_rating": 3.5,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          50,
+          70
+        ],
+        "must_have_tags": [
+          "price_anomaly"
+        ],
+        "note": "10+48+6=64 high"
+      }
+    },
+    {
+      "case_id": "eval_036",
+      "description": "低风险-仅一次事故但其他全优",
+      "input": {
+        "order_id": "ORD-E036",
+        "supplier_id": "SUP-092",
+        "amount": 95000,
+        "delay_days": 0,
+        "price_deviation": 1,
+        "supplier_rating": 4.7,
+        "historical_incidents": 1
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "note": "4+12=16 low;事故不产生标签(只有 delay/price>15/rating<3 有标签)"
+      }
+    },
+    {
+      "case_id": "eval_037",
+      "description": "中风险-历史相似度上调验证(原始分 38)",
+      "input": {
+        "order_id": "ORD-E037",
+        "supplier_id": "SUP-088",
+        "delay_days": 4,
+        "price_deviation": 4,
+        "supplier_rating": 3.8,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "medium",
+        "risk_score_range": [
+          30,
+          58
+        ],
+        "note": "公式分 38.2 为 medium;允许历史上调至 58 内"
+      }
+    },
+    {
+      "case_id": "eval_038",
+      "description": "高风险-延迟与事故叠加(原始分 55)",
+      "input": {
+        "order_id": "ORD-E038",
+        "supplier_id": "SUP-066",
+        "amount": 175000,
+        "delay_days": 7,
+        "price_deviation": 2,
+        "supplier_rating": 4.0,
+        "historical_incidents": 1
+      },
+      "expected_output": {
+        "risk_level": "high",
+        "risk_score_range": [
+          50,
+          70
+        ],
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_039",
+      "description": "低风险-延迟 1 天完美供应商",
+      "input": {
+        "order_id": "ORD-E039",
+        "supplier_id": "SUP-099",
+        "amount": 65000,
+        "delay_days": 1,
+        "price_deviation": 0,
+        "supplier_rating": 5.0,
+        "historical_incidents": 0
+      },
+      "expected_output": {
+        "risk_level": "low",
+        "risk_score_range": [
+          0,
+          30
+        ],
+        "must_have_tags": [
+          "delay"
+        ]
+      }
+    },
+    {
+      "case_id": "eval_040",
+      "description": "critical-现实复现 9/17 测试单",
+      "input": {
+        "order_id": "ORD-E040",
+        "supplier_id": "SUP-10086",
+        "amount": 185000,
+        "delay_days": 15,
+        "price_deviation": 22.5,
+        "supplier_rating": 2.4,
+        "historical_incidents": 2
+      },
+      "expected_output": {
+        "risk_level": "critical",
+        "risk_score_range": [
+          99,
+          100
+        ],
+        "must_have_tags": [
+          "delay",
+          "price_anomaly",
+          "supplier_risk"
+        ],
+        "note": "公式分已封顶 100"
+      }
+    }
+  ]
+}

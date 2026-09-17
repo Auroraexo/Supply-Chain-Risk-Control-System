@@ -1,0 +1,881 @@
+{
+  "meta": {
+    "timestamp": "2026-09-17 23:25:41",
+    "llm_mode": "real",
+    "total_cases": 40,
+    "repeat_for_consistency": 3,
+    "note": "端到端耗时受本地 Ollama 推理速度影响；蓝图 <30s 目标按云端 LLM 标定"
+  },
+  "dimensions": {
+    "accuracy": {
+      "value": 1.0,
+      "target": 0.85,
+      "pass": true,
+      "detail": "40/40 风险等级正确"
+    },
+    "consistency": {
+      "value": 1.0,
+      "target": 0.9,
+      "pass": true,
+      "detail": "5 条抽样 × 3 次重复"
+    },
+    "robustness": {
+      "value": 1.0,
+      "target": 0.8,
+      "pass": true,
+      "detail": "6/6 缺失/异常数据场景正确降级"
+    },
+    "efficiency_p95_seconds": {
+      "value": 87.44,
+      "target": 30.0,
+      "pass": false,
+      "detail": "P95=87.4s 均值=74.4s（本地 Ollama）"
+    },
+    "hallucination": {
+      "value": 0.125,
+      "target": 0.05,
+      "pass": false,
+      "detail": "5/40 条 reasoning 含无法溯源数值: ['eval_007', 'eval_016', 'eval_029', 'eval_036', 'eval_040']"
+    },
+    "explainability": {
+      "value": 1.0,
+      "target": 0.9,
+      "pass": true,
+      "detail": "0/40 条推理缺失或过短: 无（自动化近似，人工抽检另计）"
+    }
+  },
+  "baseline": {
+    "rule_engine_only_accuracy": 1.0,
+    "note": "纯规则引擎（无 LLM）对照组应恒为 1.0；Agent 低于它说明 LLM 引入了噪声"
+  },
+  "case_results": [
+    {
+      "case_id": "eval_001",
+      "description": "正常订单-低风险场景",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 2.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 66.98399999999674,
+      "passed": true
+    },
+    {
+      "case_id": "eval_002",
+      "description": "轻微延迟但仍低风险",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 16.8,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 63.15700000000652,
+      "passed": true
+    },
+    {
+      "case_id": "eval_003",
+      "description": "延迟+小幅价格偏差,低分临界",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 26.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 74.51499999999942,
+      "passed": true
+    },
+    {
+      "case_id": "eval_004",
+      "description": "优质供应商零异常",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 0.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 64.46899999999732,
+      "passed": true
+    },
+    {
+      "case_id": "eval_005",
+      "description": "无延迟但供应商评分一般",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 7.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 66.01600000000326,
+      "passed": true
+    },
+    {
+      "case_id": "eval_006",
+      "description": "medium 临界-评分刚好过 30 线",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 29.2,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 74.60899999999674,
+      "passed": true
+    },
+    {
+      "case_id": "eval_007",
+      "description": "中等延迟+评分下滑",
+      "expected_level": "medium",
+      "actual_level": "medium",
+      "expected_range": [
+        30,
+        50
+      ],
+      "actual_score": 37.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 78.82800000000861,
+      "passed": true
+    },
+    {
+      "case_id": "eval_008",
+      "description": "价格偏差主导的中风险",
+      "expected_level": "medium",
+      "actual_level": "medium",
+      "expected_range": [
+        30,
+        50
+      ],
+      "actual_score": 45.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": false,
+      "missing_tags": [
+        "price_anomaly"
+      ],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 78.625,
+      "passed": false
+    },
+    {
+      "case_id": "eval_009",
+      "description": "一次历史事故+延迟",
+      "expected_level": "medium",
+      "actual_level": "medium",
+      "expected_range": [
+        30,
+        50
+      ],
+      "actual_score": 32.2,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 80.96899999999732,
+      "passed": true
+    },
+    {
+      "case_id": "eval_010",
+      "description": "供应商风险主导",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 16.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 85.42199999999139,
+      "passed": true
+    },
+    {
+      "case_id": "eval_011",
+      "description": "high 临界-多因子叠加",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        50,
+        70
+      ],
+      "actual_score": 53.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 69.46900000001187,
+      "passed": true
+    },
+    {
+      "case_id": "eval_012",
+      "description": "严重延迟+价格异常",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        50,
+        70
+      ],
+      "actual_score": 68.8,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": false,
+      "missing_tags": [
+        "price_anomaly"
+      ],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 67.84399999999732,
+      "passed": false
+    },
+    {
+      "case_id": "eval_013",
+      "description": "历史事故多次+评分差",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        50,
+        70
+      ],
+      "actual_score": 55.8,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 76.40600000000268,
+      "passed": true
+    },
+    {
+      "case_id": "eval_014",
+      "description": "价格偏差 20% 主导高风险",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        50,
+        70
+      ],
+      "actual_score": 64.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 73.04699999999139,
+      "passed": true
+    },
+    {
+      "case_id": "eval_015",
+      "description": "延迟 9 天+评分 3.0",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        50,
+        70
+      ],
+      "actual_score": 56.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 79.59399999999732,
+      "passed": true
+    },
+    {
+      "case_id": "eval_016",
+      "description": "灾难场景-全因子恶化",
+      "expected_level": "critical",
+      "actual_level": "critical",
+      "expected_range": [
+        70,
+        100
+      ],
+      "actual_score": 100.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 77.38999999999942,
+      "passed": true
+    },
+    {
+      "case_id": "eval_017",
+      "description": "极长延迟主导 critical",
+      "expected_level": "critical",
+      "actual_level": "critical",
+      "expected_range": [
+        70,
+        100
+      ],
+      "actual_score": 94.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 84.23500000000058,
+      "passed": true
+    },
+    {
+      "case_id": "eval_018",
+      "description": "评分极差+多次事故",
+      "expected_level": "critical",
+      "actual_level": "critical",
+      "expected_range": [
+        70,
+        100
+      ],
+      "actual_score": 71.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 79.07800000000861,
+      "passed": true
+    },
+    {
+      "case_id": "eval_019",
+      "description": "封顶验证-理论分超 100",
+      "expected_level": "critical",
+      "actual_level": "critical",
+      "expected_range": [
+        99,
+        100
+      ],
+      "actual_score": 100.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 74.70299999999406,
+      "passed": true
+    },
+    {
+      "case_id": "eval_020",
+      "description": "critical 临界-刚好过 70 线",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        50,
+        70
+      ],
+      "actual_score": 69.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 84.46899999999732,
+      "passed": true
+    },
+    {
+      "case_id": "eval_021",
+      "description": "鲁棒性-所有可选项缺失",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 8.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.4,
+      "elapsed": 54.78100000000268,
+      "passed": true
+    },
+    {
+      "case_id": "eval_022",
+      "description": "鲁棒性-仅延迟字段",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 28.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.4,
+      "elapsed": 65.0,
+      "passed": true
+    },
+    {
+      "case_id": "eval_023",
+      "description": "鲁棒性-仅历史事故字段",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 28.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.4,
+      "elapsed": 67.84399999999732,
+      "passed": true
+    },
+    {
+      "case_id": "eval_024",
+      "description": "鲁棒性-数值为字符串类型",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        50,
+        70
+      ],
+      "actual_score": 53.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": false,
+      "missing_tags": [
+        "price_anomaly"
+      ],
+      "forbidden_tags": [],
+      "data_quality": 0.4,
+      "elapsed": 64.31200000000536,
+      "passed": false
+    },
+    {
+      "case_id": "eval_025",
+      "description": "鲁棒性-负值输入(异常数据)",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 4.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.4,
+      "elapsed": 69.28100000000268,
+      "passed": true
+    },
+    {
+      "case_id": "eval_026",
+      "description": "鲁棒性-超大数值输入",
+      "expected_level": "critical",
+      "actual_level": "critical",
+      "expected_range": [
+        99,
+        100
+      ],
+      "actual_score": 100.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.4,
+      "elapsed": 83.2039999999979,
+      "passed": true
+    },
+    {
+      "case_id": "eval_027",
+      "description": "边界验证-评分正好 30(low 上界)",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        29,
+        31
+      ],
+      "actual_score": 30.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.4,
+      "elapsed": 66.98399999999674,
+      "passed": true
+    },
+    {
+      "case_id": "eval_028",
+      "description": "边界验证-评分正好 50(high 上界)",
+      "expected_level": "medium",
+      "actual_level": "medium",
+      "expected_range": [
+        49,
+        51
+      ],
+      "actual_score": 50.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.4,
+      "elapsed": 76.67200000000594,
+      "passed": true
+    },
+    {
+      "case_id": "eval_029",
+      "description": "边界验证-评分正好 70(critical 上界)",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        69,
+        71
+      ],
+      "actual_score": 70.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.4,
+      "elapsed": 72.73399999999674,
+      "passed": true
+    },
+    {
+      "case_id": "eval_030",
+      "description": "现实样本-华东可疑供应商(高投诉率)",
+      "expected_level": "critical",
+      "actual_level": "critical",
+      "expected_range": [
+        70,
+        100
+      ],
+      "actual_score": 82.6,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 75.32799999999406,
+      "passed": true
+    },
+    {
+      "case_id": "eval_031",
+      "description": "现实样本-东莞精密电子延迟事件",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        50,
+        70
+      ],
+      "actual_score": 56.8,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 76.4380000000092,
+      "passed": true
+    },
+    {
+      "case_id": "eval_032",
+      "description": "现实样本-主控芯片库存告急",
+      "expected_level": "critical",
+      "actual_level": "critical",
+      "expected_range": [
+        70,
+        100
+      ],
+      "actual_score": 77.2,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 84.90600000000268,
+      "passed": true
+    },
+    {
+      "case_id": "eval_033",
+      "description": "大额低风险-高价值订单正常履约",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 0.4,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 63.530999999988126,
+      "passed": true
+    },
+    {
+      "case_id": "eval_034",
+      "description": "中风险-新供应商首单轻微异常",
+      "expected_level": "medium",
+      "actual_level": "medium",
+      "expected_range": [
+        30,
+        50
+      ],
+      "actual_score": 39.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 74.01600000000326,
+      "passed": true
+    },
+    {
+      "case_id": "eval_035",
+      "description": "高风险-价格偏差 16% 刚过标签线",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        50,
+        70
+      ],
+      "actual_score": 64.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 90.84399999999732,
+      "passed": true
+    },
+    {
+      "case_id": "eval_036",
+      "description": "低风险-仅一次事故但其他全优",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 14.2,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 74.48400000001129,
+      "passed": true
+    },
+    {
+      "case_id": "eval_037",
+      "description": "中风险-历史相似度上调验证(原始分 38)",
+      "expected_level": "medium",
+      "actual_level": "medium",
+      "expected_range": [
+        30,
+        58
+      ],
+      "actual_score": 36.8,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.4,
+      "elapsed": 87.54699999999139,
+      "passed": true
+    },
+    {
+      "case_id": "eval_038",
+      "description": "高风险-延迟与事故叠加(原始分 55)",
+      "expected_level": "high",
+      "actual_level": "high",
+      "expected_range": [
+        50,
+        70
+      ],
+      "actual_score": 55.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 74.96899999999732,
+      "passed": true
+    },
+    {
+      "case_id": "eval_039",
+      "description": "低风险-延迟 1 天完美供应商",
+      "expected_level": "low",
+      "actual_level": "low",
+      "expected_range": [
+        0,
+        30
+      ],
+      "actual_score": 5.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 75.88999999999942,
+      "passed": true
+    },
+    {
+      "case_id": "eval_040",
+      "description": "critical-现实复现 9/17 测试单",
+      "expected_level": "critical",
+      "actual_level": "critical",
+      "expected_range": [
+        99,
+        100
+      ],
+      "actual_score": 100.0,
+      "level_ok": true,
+      "score_ok": true,
+      "tags_ok": true,
+      "missing_tags": [],
+      "forbidden_tags": [],
+      "data_quality": 0.6,
+      "elapsed": 77.21900000001187,
+      "passed": true
+    }
+  ],
+  "consistency_results": [
+    {
+      "case_id": "eval_001",
+      "levels": [
+        "low"
+      ],
+      "scores": [
+        2.0,
+        2.0,
+        2.0
+      ],
+      "consistent": true
+    },
+    {
+      "case_id": "eval_002",
+      "levels": [
+        "low"
+      ],
+      "scores": [
+        16.8,
+        16.8,
+        16.8
+      ],
+      "consistent": true
+    },
+    {
+      "case_id": "eval_003",
+      "levels": [
+        "low"
+      ],
+      "scores": [
+        26.0,
+        26.0,
+        26.0
+      ],
+      "consistent": true
+    },
+    {
+      "case_id": "eval_004",
+      "levels": [
+        "low"
+      ],
+      "scores": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "consistent": true
+    },
+    {
+      "case_id": "eval_005",
+      "levels": [
+        "low"
+      ],
+      "scores": [
+        7.0,
+        7.0,
+        7.0
+      ],
+      "consistent": true
+    }
+  ]
+}

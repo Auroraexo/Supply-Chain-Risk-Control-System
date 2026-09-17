@@ -35,11 +35,24 @@ async def analyst_node(state: AgentState) -> AgentState:
     try:
         facts = state.get("structured_facts", {})
 
-        # ── 阶段 1：提取分析参数 ──
-        delay_days = facts.get("delay_days", 0)
-        price_deviation = abs(facts.get("price_deviation", 0))
-        supplier_rating = facts.get("supplier_rating", 3.0)
-        historical_incidents = facts.get("historical_incidents", 0)
+        # ── 阶段 1：提取分析参数（容错清洗：字符串数值转 float，负值钳制为 0，评分夹在 0-5） ──
+        def _num(key: str, default: float, minimum: float | None = 0.0, maximum: float | None = None) -> float:
+            raw = facts.get(key, default)
+            try:
+                v = float(raw)
+            except (TypeError, ValueError):
+                logger.warning("analyst.invalid_field_value", field=key, raw=repr(raw), using_default=default)
+                v = float(default)
+            if minimum is not None:
+                v = max(minimum, v)
+            if maximum is not None:
+                v = min(maximum, v)
+            return v
+
+        delay_days = _num("delay_days", 0)
+        price_deviation = _num("price_deviation", 0)
+        supplier_rating = _num("supplier_rating", 3.0, minimum=0.0, maximum=5.0)
+        historical_incidents = _num("historical_incidents", 0)
 
         logger.info(
             "analyst.input_params",
