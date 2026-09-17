@@ -116,8 +116,11 @@ class DecisionService:
         }
 
     async def get_decision(self, request_id: str) -> dict | None:
-        """获取决策结果。"""
-        decision = await self.decision_repo.get_by_request_id(request_id)
+        """获取决策结果。
+
+        request_id 参数兼容主键 id：前端列表跳转传的是记录主键。
+        """
+        decision = await self.decision_repo.get_by_request_or_id(request_id)
         if not decision:
             return None
         return {
@@ -131,23 +134,33 @@ class DecisionService:
         }
 
     async def get_trace(self, request_id: str) -> dict:
-        """获取决策追踪信息。"""
-        logs = await self.agent_log_repo.get_by_request_id(request_id)
-        total_tokens = await self.agent_log_repo.get_total_tokens(request_id)
-        trace = [
+        """获取决策追踪信息。
+
+        request_id 兼容主键 id；输出结构对齐前端 DecisionTrace：
+        steps 为 Agent 执行步骤列表，final_decision/confidence 来自决策记录。
+        """
+        decision = await self.decision_repo.get_by_request_or_id(request_id)
+        actual_request_id = decision.request_id if decision else request_id
+
+        logs = await self.agent_log_repo.get_by_request_id(actual_request_id)
+        total_tokens = await self.agent_log_repo.get_total_tokens(actual_request_id)
+        steps = [
             {
-                "agent": log.agent_name,
-                "node": log.node_name,
-                "latency_ms": log.latency_ms,
-                "tokens": {"prompt": log.prompt_tokens, "completion": log.completion_tokens},
-                "error": log.error_message,
+                "step": log.node_name,
+                "action": log.agent_name,
+                "input": None,
+                "output": log.error_message or None,
+                "elapsed_ms": log.latency_ms or 0,
+                "status": "error" if log.error_message else "success",
             }
             for log in logs
         ]
         total_latency = sum(log.latency_ms or 0 for log in logs)
         return {
-            "request_id": request_id,
-            "trace": trace,
+            "request_id": actual_request_id,
+            "steps": steps,
+            "final_decision": decision.decision.value if decision else "unknown",
+            "confidence": decision.confidence if decision else 0.0,
             "total_latency_ms": total_latency,
             "total_tokens": total_tokens,
         }
@@ -169,8 +182,11 @@ class DecisionService:
         }
 
     async def submit_review(self, request_id: str, action: str, reviewer: str, comment: str | None = None, override_decision: str | None = None) -> dict:
-        """提交人工审核结果。"""
-        decision = await self.decision_repo.get_by_request_id(request_id)
+        """提交人工审核结果。
+
+        request_id 参数兼容主键 id：前端审批页路由参数是记录主键。
+        """
+        decision = await self.decision_repo.get_by_request_or_id(request_id)
         if not decision:
             raise NotFoundException(f"决策结果未找到: {request_id}")
 

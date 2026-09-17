@@ -1,4 +1,4 @@
-import { get, post, put, del } from './api';
+import { get, post, put, del, extractPaginated } from './api';
 import type { User } from '@/types/models';
 import type { PaginatedData, PaginationParams } from '@/types/api';
 
@@ -8,7 +8,10 @@ export interface UserQueryParams extends PaginationParams {
 }
 
 export const userService = {
-  list: (params?: UserQueryParams) => get<PaginatedData<User>>('/users', params as Record<string, unknown>),
+  list: async (params?: UserQueryParams): Promise<PaginatedData<User>> => {
+    const res = await get<unknown>('/users', params as Record<string, unknown>);
+    return extractPaginated<User>(res);
+  },
   create: (data: { username: string; email: string; password: string; role: string }) =>
     post<User>('/users', data),
   update: (userId: string, data: { email?: string; role?: string; is_active?: boolean }) =>

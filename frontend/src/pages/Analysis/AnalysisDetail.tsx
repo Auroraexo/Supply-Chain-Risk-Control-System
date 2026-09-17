@@ -35,7 +35,9 @@ export function AnalysisDetail() {
   if (loadError) return <StatePanel title="无法加载风险分析" description="分析数据暂时不可用，请稍后重试。" onRetry={fetchAnalysis}/>;
   if (!analysis) return <StatePanel title="分析结果不存在" description="该结果可能已删除或请求地址无效。"/>;
 
-  const score = Math.round(analysis.risk_score * 100);
+  // risk_level/risk_score 可能因进入人工审核而为 null，统一降级展示
+  const hasLevel = Boolean(analysis.risk_level);
+  const score = Math.round((analysis.risk_score ?? 0) * 100);
   const facts = analysis.facts_summary ? Object.entries(analysis.facts_summary) : [];
   const riskTone = analysis.risk_level === 'critical' ? 'text-risk-critical' : analysis.risk_level === 'high' ? 'text-risk-high' : analysis.risk_level === 'medium' ? 'text-risk-medium' : 'text-risk-low';
   return (
@@ -49,7 +51,7 @@ export function AnalysisDetail() {
         <div className="space-y-4 lg:col-span-2">
           <Card padding="lg" className="overflow-hidden">
             <div className="grid gap-6 sm:grid-cols-[180px_1fr] sm:items-center">
-              <div className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full" style={{background:`conic-gradient(var(--color-risk-${analysis.risk_level === 'none' ? 'low' : analysis.risk_level}) ${score * 3.6}deg, var(--color-bg-tertiary) 0)`}}><div className="flex h-32 w-32 flex-col items-center justify-center rounded-full bg-bg-secondary"><span className={`font-mono text-[42px] font-bold leading-none ${riskTone}`}>{score}</span><span className="mt-1 text-caption text-text-muted">风险评分 / 100</span></div></div>
+              <div className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full" style={{background:`conic-gradient(var(--color-risk-${!hasLevel || analysis.risk_level === 'none' ? 'none' : analysis.risk_level}) ${score * 3.6}deg, var(--color-bg-tertiary) 0)`}}><div className="flex h-32 w-32 flex-col items-center justify-center rounded-full bg-bg-secondary"><span className={`font-mono text-[42px] font-bold leading-none ${riskTone}`}>{hasLevel ? score : '—'}</span><span className="mt-1 text-caption text-text-muted">风险评分 / 100</span></div></div>
               <div><p className="text-caption font-semibold text-accent-blue">AI 风险研判结论</p><h2 className="mt-2 text-h2 text-text-primary">{analysis.risk_level === 'critical' ? '发现重大供应链风险，建议立即处置' : analysis.risk_level === 'high' ? '发现高风险信号，需要优先人工复核' : analysis.risk_level === 'medium' ? '存在潜在风险，建议持续观察' : '当前风险处于可控范围'}</h2><p className="mt-3 whitespace-pre-wrap text-body leading-7 text-text-secondary">{analysis.reasoning || '系统尚未生成详细推理。请结合下方事实证据完成研判。'}</p></div>
             </div>
           </Card>
@@ -61,7 +63,7 @@ export function AnalysisDetail() {
 
           <Card padding="lg">
             <div className="mb-4 flex items-center gap-2"><GitBranch size={19} className="text-accent-purple"/><h2 className="text-h3 text-text-primary">Agent 决策链路</h2></div>
-            {traceLoading ? <div className="flex items-center gap-2 py-8 text-text-muted"><Loader2 size={16} className="animate-spin"/>正在加载决策追踪...</div> : trace ? <div>{trace.steps.map((step,index)=><StepTimeline key={`${step.step}-${index}`} step={step} isLast={index===trace.steps.length-1}/>)}<div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border pt-4"><span className="text-caption text-text-muted">最终建议</span><Badge variant={trace.final_decision === 'approve' ? 'success' : 'high'}>{trace.final_decision}</Badge><span className="text-caption text-text-muted">置信度 {Math.round(trace.confidence*100)}%</span></div></div> : <p className="rounded-btn bg-bg-tertiary/40 p-4 text-caption text-text-muted">暂无 Agent 执行链路，当前分析可能尚未进入决策阶段。</p>}
+            {traceLoading ? <div className="flex items-center gap-2 py-8 text-text-muted"><Loader2 size={16} className="animate-spin"/>正在加载决策追踪...</div> : trace && (trace.steps?.length ?? 0) > 0 ? <div>{trace.steps!.map((step,index)=><StepTimeline key={`${step.step}-${index}`} step={step} isLast={index===trace.steps!.length-1}/>)}<div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border pt-4"><span className="text-caption text-text-muted">最终建议</span><Badge variant={trace.final_decision === 'approve' ? 'success' : 'high'}>{trace.final_decision}</Badge><span className="text-caption text-text-muted">置信度 {Math.round((trace.confidence ?? 0)*100)}%</span></div></div> : <p className="rounded-btn bg-bg-tertiary/40 p-4 text-caption text-text-muted">暂无 Agent 执行链路，当前分析可能尚未进入决策阶段。</p>}
           </Card>
         </div>
 

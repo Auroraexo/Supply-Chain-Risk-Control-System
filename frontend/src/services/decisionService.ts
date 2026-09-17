@@ -1,9 +1,12 @@
-import { get, post } from './api';
+import { get, post, extractPaginated } from './api';
 import type { DecisionResult } from '@/types/models';
 import type { PaginatedData, PaginationParams } from '@/types/api';
 
 export const decisionService = {
-  list: (params?: PaginationParams) => get<PaginatedData<DecisionResult>>('/decision', params as Record<string, unknown>),
+  list: async (params?: PaginationParams): Promise<PaginatedData<DecisionResult>> => {
+    const res = await get<unknown>('/decision', params as Record<string, unknown>);
+    return extractPaginated<DecisionResult>(res);
+  },
   getById: (requestId: string) => get<DecisionResult>(`/decision/${requestId}`),
   approve: (requestId: string, comment?: string) => post<DecisionResult>(`/review/${requestId}/approve`, { action: 'approve', comment }),
   reject: (requestId: string, comment: string) => post<DecisionResult>(`/review/${requestId}/reject`, { action: 'reject', comment }),

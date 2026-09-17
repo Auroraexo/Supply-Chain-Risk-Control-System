@@ -32,7 +32,7 @@ export function AnalysisList() {
     setLoading(true);
     try {
       const res = await analysisService.list({ page: 1, page_size: 50 });
-      setAnalyses(res?.data?.items || []);
+      setAnalyses(res?.items || []);
     } catch (error) {
       console.error('Failed to fetch analyses:', error);
       addToast({ type: 'error', title: '加载失败', message: '无法获取分析结果' });
@@ -140,7 +140,7 @@ export function AnalysisList() {
                 <p className="text-body font-medium text-text-primary mb-2 truncate">{analysis.request_id}</p>
                 <div className="mb-3">
                   <ProgressBar
-                    value={analysis.risk_score * 100}
+                    value={(analysis.risk_score ?? 0) * 100}
                     size="sm"
                     variant={analysis.risk_level === 'critical' ? 'red' : analysis.risk_level === 'high' ? 'amber' : 'green'}
                     showLabel
@@ -159,7 +159,7 @@ export function AnalysisList() {
                     {new Date(analysis.created_at).toLocaleDateString('zh-CN')}
                   </span>
                   <span className="text-caption text-text-muted font-mono">
-                    评分: {(analysis.risk_score * 100).toFixed(0)}
+                    评分: {((analysis.risk_score ?? 0) * 100).toFixed(0)}
                   </span>
                 </div>
               </Card>
@@ -188,7 +188,7 @@ export function AnalysisList() {
                   </p>
                 </div>
                 <div className="hidden sm:block w-32">
-                  <ProgressBar value={analysis.risk_score * 100} size="sm" variant={
+                  <ProgressBar value={(analysis.risk_score ?? 0) * 100} size="sm" variant={
                     analysis.risk_level === 'critical' ? 'red' : analysis.risk_level === 'high' ? 'amber' : 'green'
                   } showLabel />
                   <p className="text-caption text-text-muted mt-1 text-center">风险评分</p>

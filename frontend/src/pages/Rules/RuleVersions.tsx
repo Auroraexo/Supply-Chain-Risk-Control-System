@@ -26,7 +26,7 @@ export function RuleVersions() {
       try {
         // 获取所有规则的版本（这里简化为获取第一个规则的版本）
         const rulesRes = await ruleService.list({ page: 1, page_size: 1 });
-        const items = rulesRes?.data?.items || [];
+        const items = rulesRes?.items || [];
         if (items.length > 0) {
           const ruleId = items[0].id;
           const res = await ruleService.getVersions(ruleId);

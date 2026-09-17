@@ -14,8 +14,11 @@ const levelConfig: Record<RiskLevel, { label: string; className: string }> = {
   none: { label: '无风险', className: 'bg-risk-none/15 text-risk-none border-risk-none/30' },
 };
 
+/** level 缺失（如分析尚未完成、进入人工审核）时的降级展示 */
+const unknownConfig = { label: '待评级', className: 'bg-bg-tertiary/50 text-text-muted border-border' };
+
 export function RiskLevelBadge({ level, size = 'md' }: RiskLevelBadgeProps) {
-  const config = levelConfig[level];
+  const config = (level && levelConfig[level]) || unknownConfig;
   return (
     <span
       className={clsx(

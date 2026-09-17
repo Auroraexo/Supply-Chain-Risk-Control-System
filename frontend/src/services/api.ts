@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { ApiResponse } from '@/types/api';
+import type { ApiResponse, PaginatedData } from '@/types/api';
 import { useProgressStore } from '@/stores/progressStore';
 
 const api = axios.create({
@@ -66,6 +66,36 @@ export async function put<T>(url: string, data?: unknown): Promise<ApiResponse<T
 export async function del<T>(url: string): Promise<ApiResponse<T>> {
   const response = await api.delete<ApiResponse<T>>(url);
   return response.data;
+}
+
+/**
+ * 解析分页响应。
+ * 后端 PaginatedResponse 结构为扁平的 `{ data: [...], total, page, page_size }`
+ * （data 是数组、total 在顶层），本函数同时兼容 `{ data: { items, total } }`
+ * 的嵌套结构，统一输出 PaginatedData 形态供列表页使用。
+ */
+export function extractPaginated<T>(res: ApiResponse<unknown>): PaginatedData<T> {
+  const d = res?.data as unknown;
+  if (Array.isArray(d)) {
+    return {
+      items: d as T[],
+      total: (res as unknown as { total?: number }).total ?? d.length,
+      page: (res as unknown as { page?: number }).page ?? 1,
+      page_size: (res as unknown as { page_size?: number }).page_size ?? d.length,
+      total_pages: 1,
+    };
+  }
+  if (d && typeof d === 'object' && Array.isArray((d as { items?: unknown }).items)) {
+    const nested = d as PaginatedData<T>;
+    return {
+      items: nested.items,
+      total: nested.total ?? nested.items.length,
+      page: nested.page ?? 1,
+      page_size: nested.page_size ?? nested.items.length,
+      total_pages: nested.total_pages ?? 1,
+    };
+  }
+  return { items: [], total: 0, page: 1, page_size: 0, total_pages: 0 };
 }
 
 export default api;

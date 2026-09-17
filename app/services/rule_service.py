@@ -164,6 +164,82 @@ class RuleService:
         logger.info("rule_service.rolled_back", rule_id=rule_id, from_version=next_version, to_version=version)
         return self._rule_to_dict(updated)
 
+    async def test_tree(self, context: dict) -> dict:
+        """用给定数据在服务端测试规则树匹配。
+
+        语义与 RuleExecutor 一致：条件节点按操作符评估，group 透传子节点，
+        命中的节点按权重累加评分（归一化到 0-1）。返回命中路径与明细。
+        """
+        import operator as _op
+
+        tree = await self.get_tree()
+        ops = {
+            "gt": _op.gt, "gte": _op.ge, "lt": _op.lt, "lte": _op.le,
+            "eq": _op.eq, "neq": _op.ne, "ne": _op.ne,
+            "in": lambda a, b: a in b if isinstance(b, (list, str)) else False,
+            "contains": lambda a, b: b in a if isinstance(a, str) else False,
+        }
+
+        details: list[dict] = []
+        path: list[str] = []
+        total_weight = 0.0
+        hit_weight = 0.0
+
+        def _match(node: dict) -> bool:
+            nonlocal total_weight, hit_weight
+            total_weight += node.get("weight", 1.0)
+            rtype = node.get("rule_type")
+            if rtype == "group":
+                children = node.get("children") or []
+                results = [_match(c) for c in children]
+                logic = (node.get("logic_op") or "AND").upper()
+                if logic == "OR":
+                    ok = any(results) if results else False
+                elif logic == "NOT":
+                    ok = not all(results)
+                else:
+                    ok = all(results) if results else True
+            else:
+                field = node.get("field_name")
+                op_name = node.get("operator")
+                threshold = node.get("threshold_value")
+                actual = context.get(field) if field else None
+                ok = False
+                if op_name in ops:
+                    try:
+                        # 数值比较前尝试转换；失败按原值比较
+                        try:
+                            actual_cmp, threshold_cmp = float(actual), float(threshold)
+                        except (TypeError, ValueError):
+                            actual_cmp, threshold_cmp = actual, threshold
+                        ok = bool(ops[op_name](actual_cmp, threshold_cmp))
+                    except (TypeError, ValueError):
+                        ok = False
+
+            if ok:
+                path.append(node.get("rule_name", ""))
+                hit_weight += node.get("weight", 1.0)
+            details.append({
+                "rule_name": node.get("rule_name"),
+                "rule_type": rtype,
+                "matched": ok,
+                "field": node.get("field_name"),
+                "operator": node.get("operator"),
+                "threshold": node.get("threshold_value"),
+                "actual": context.get(node.get("field_name")) if node.get("field_name") else None,
+            })
+            # 条件节点的子节点同样递归评估（保持与前端遍历一致的宽容语义）
+            for child in node.get("children") or []:
+                if rtype != "group":
+                    _match(child)
+            return ok
+
+        for root in tree:
+            _match(root)
+
+        score = round(hit_weight / total_weight, 4) if total_weight > 0 else 0.0
+        return {"matched": len(path) > 0, "path": path, "score": score, "details": details}
+
     def _rule_to_dict(self, rule: RuleNode, include_children: bool = False) -> dict:
         data = {
             "id": rule.id,

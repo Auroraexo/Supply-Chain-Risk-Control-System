@@ -61,8 +61,66 @@ function RuleNodeItem({
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(node.rule_name);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const { addToast } = useToastStore();
   const hasChildren = node.children && node.children.length > 0;
+
+  /** 提交重命名：调用后端 update 持久化，失败回滚并提示 */
+  const commitRename = useCallback(async () => {
+    const name = editName.trim();
+    setEditing(false);
+    if (!name || name === node.rule_name) {
+      setEditName(node.rule_name);
+      return;
+    }
+    setRenaming(true);
+    try {
+      await ruleService.update(node.id, { rule_name: name, rule_type: node.rule_type } as Partial<RuleNode>);
+      addToast({ type: 'success', title: '已重命名', message: `节点已更名为 "${name}"` });
+      onRefresh();
+    } catch (err: unknown) {
+      setEditName(node.rule_name);
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: string | { message?: string } } } };
+      let msg = '重命名失败';
+      if (axiosErr.response?.status === 403) msg = '权限不足，需要管理员权限';
+      else if (axiosErr.response?.data?.detail) {
+        const detail = axiosErr.response.data.detail;
+        msg = typeof detail === 'string' ? detail : detail.message || msg;
+      }
+      addToast({ type: 'error', title: '重命名失败', message: msg });
+    } finally {
+      setRenaming(false);
+    }
+  }, [editName, node.id, node.rule_name, node.rule_type, addToast, onRefresh]);
+
+  /** 复制节点：在同级创建同名副本（副本为叶子节点，避免递归复制带来的父子歧义） */
+  const handleDuplicate = useCallback(async () => {
+    try {
+      await ruleService.create({
+        rule_name: `${node.rule_name} (副本)`,
+        rule_type: node.rule_type,
+        parent_id: node.parent_id || null,
+        field_name: node.field_name || null,
+        operator: node.operator || null,
+        threshold_value: node.threshold_value || null,
+        logic_op: node.logic_op,
+        weight: node.weight,
+        priority: node.priority,
+        description: node.description || null,
+      } as Partial<RuleNode>);
+      addToast({ type: 'success', title: '复制成功', message: `已创建 "${node.rule_name} (副本)"` });
+      onRefresh();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: string | { message?: string } } } };
+      let msg = '复制失败';
+      if (axiosErr.response?.status === 403) msg = '权限不足，需要管理员权限';
+      else if (axiosErr.response?.data?.detail) {
+        const detail = axiosErr.response.data.detail;
+        msg = typeof detail === 'string' ? detail : detail.message || msg;
+      }
+      addToast({ type: 'error', title: '复制失败', message: msg });
+    }
+  }, [node, addToast, onRefresh]);
 
   const handleToggle = useCallback(async () => {
     try {
@@ -113,10 +171,14 @@ function RuleNodeItem({
             <input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              className="bg-bg-primary border border-accent-blue rounded-input px-2 py-0.5 text-body text-text-primary outline-none"
+              disabled={renaming}
+              className="bg-bg-primary border border-accent-blue rounded-input px-2 py-0.5 text-body text-text-primary outline-none disabled:opacity-60"
               autoFocus
-              onBlur={() => setEditing(false)}
-              onKeyDown={(e) => e.key === 'Enter' && setEditing(false)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void commitRename();
+                if (e.key === 'Escape') { setEditName(node.rule_name); setEditing(false); }
+              }}
             />
           ) : (
             <span className="text-body text-text-primary font-medium truncate">{node.rule_name}</span>
@@ -165,7 +227,7 @@ function RuleNodeItem({
           onClose={() => setCtxMenu(null)}
           items={[
             { label: '编辑节点', icon: <Edit3 size={14} />, onClick: () => { setEditing(true); setEditName(node.rule_name); } },
-            { label: '复制节点', icon: <Copy size={14} />, onClick: () => addToast({ type: 'info', title: '已复制', message: `节点 "${node.rule_name}" 已复制到剪贴板` }) },
+            { label: '复制节点', icon: <Copy size={14} />, onClick: handleDuplicate },
             { label: '添加子节点', icon: <Plus size={14} />, onClick: () => addToast({ type: 'info', title: '添加子节点', message: '请使用工具栏"添加节点"按钮' }) },
             { divider: true },
             { label: node.is_active ? '禁用节点' : '启用节点', icon: <EyeOff size={14} />, onClick: handleToggle },
@@ -313,66 +375,83 @@ export function RuleEditor() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      addToast({ type: 'success', title: '规则已保存', message: '当前规则树已保存' });
-    } catch {
-      addToast({ type: 'error', title: '保存失败', message: '规则保存失败' });
+      // 拉取后端最新树，与本地树做 diff：本地与后端优先级/名称不一致的节点逐个更新。
+      // 拖拽排序已在 handleDragEnd 内即时保存；这里兜底保存其余未持久化的改动。
+      const res = await ruleService.getTree();
+      const remote = res?.data || [];
+      const localById = new Map<string, RuleNode>();
+      const walk = (nodes: RuleNode[]) => nodes.forEach((n) => { localById.set(n.id, n); if (n.children) walk(n.children); });
+      walk(tree);
+      const remoteById = new Map<string, RuleNode>();
+      const walkRemote = (nodes: RuleNode[]) => nodes.forEach((n) => { remoteById.set(n.id, n); if (n.children) walkRemote(n.children); });
+      walkRemote(remote);
+
+      const updates: Promise<unknown>[] = [];
+      localById.forEach((localNode, id) => {
+        const remoteNode = remoteById.get(id);
+        if (!remoteNode) return;
+        const changed =
+          localNode.rule_name !== remoteNode.rule_name ||
+          localNode.description !== remoteNode.description ||
+          localNode.weight !== remoteNode.weight ||
+          localNode.priority !== remoteNode.priority;
+        if (changed) {
+          updates.push(ruleService.update(id, {
+            rule_name: localNode.rule_name,
+            description: localNode.description,
+            weight: localNode.weight,
+            priority: localNode.priority,
+            rule_type: localNode.rule_type,
+          } as Partial<RuleNode>));
+        }
+      });
+
+      if (updates.length === 0) {
+        addToast({ type: 'info', title: '无需保存', message: '当前规则树与服务器一致' });
+        return;
+      }
+      await Promise.all(updates);
+      addToast({ type: 'success', title: '规则已保存', message: `已同步 ${updates.length} 处变更` });
+      fetchTree();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: string | { message?: string } } } };
+      let msg = '规则保存失败';
+      if (axiosErr.response?.status === 403) msg = '权限不足，需要管理员权限保存规则';
+      else if (axiosErr.response?.data?.detail) {
+        const detail = axiosErr.response.data.detail;
+        msg = typeof detail === 'string' ? detail : detail.message || msg;
+      }
+      addToast({ type: 'error', title: '保存失败', message: msg });
     } finally {
       setSaving(false);
     }
   };
 
-  const handleTest = useCallback(() => {
+  const handleTest = useCallback(async () => {
     setTestRunning(true);
     setTestResult(null);
-    // 模拟规则匹配（前端简易实现）
-    setTimeout(() => {
-      try {
-        const data = JSON.parse(testInput);
-        const path: string[] = [];
-        let score = 0;
-
-        const traverse = (nodes: RuleNode[], depth = 0) => {
-          for (const node of nodes) {
-            if (!node.is_active) continue;
-            const fieldVal = node.field_name ? data[node.field_name] : null;
-            let matched = false;
-
-            if (node.rule_type === 'condition' && node.field_name && node.operator) {
-              const threshold = parseFloat(node.threshold_value || '0');
-              const val = parseFloat(fieldVal);
-              switch (node.operator) {
-                case 'gt': matched = !isNaN(val) && val > threshold; break;
-                case 'gte': matched = !isNaN(val) && val >= threshold; break;
-                case 'lt': matched = !isNaN(val) && val < threshold; break;
-                case 'lte': matched = !isNaN(val) && val <= threshold; break;
-                case 'eq': matched = fieldVal === node.threshold_value; break;
-                case 'neq': matched = fieldVal !== node.threshold_value; break;
-                case 'contains': matched = typeof fieldVal === 'string' && fieldVal.includes(node.threshold_value || ''); break;
-                default: matched = false;
-              }
-            } else if (node.rule_type === 'group') {
-              matched = true; // 分组节点始终匹配，继续遍历子节点
-            }
-
-            if (matched || node.rule_type === 'group') {
-              path.push(node.rule_name);
-              score += node.weight;
-              if (node.children && node.children.length > 0) {
-                traverse(node.children, depth + 1);
-              }
-            }
-          }
-        };
-
-        traverse(tree);
-        setTestResult({ matched: path.length > 0, path, score: Math.min(score, 1) });
-      } catch {
-        setTestResult({ matched: false, path: [], score: 0 });
-      } finally {
-        setTestRunning(false);
-      }
-    }, 300);
-  }, [testInput, tree]);
+    try {
+      const context = JSON.parse(testInput) as Record<string, unknown>;
+      const res = await ruleService.test(context);
+      setTestResult({
+        matched: res.data?.matched ?? false,
+        path: res.data?.path ?? [],
+        score: res.data?.score ?? 0,
+      });
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string | { message?: string } } } };
+      const detail = axiosErr.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : detail?.message;
+      addToast({
+        type: 'error',
+        title: '测试失败',
+        message: msg || '请检查测试数据是否为合法 JSON 对象',
+      });
+      setTestResult(null);
+    } finally {
+      setTestRunning(false);
+    }
+  }, [testInput, addToast]);
 
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {

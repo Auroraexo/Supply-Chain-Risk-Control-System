@@ -53,5 +53,14 @@ class RuleVersionResponse(BaseModel):
 class RuleToggleRequest(BaseModel):
     is_active: bool
 
+class RuleTestRequest(BaseModel):
+    context: dict = Field(..., description="测试输入数据，键为规则字段名")
+
+class RuleTestResult(BaseModel):
+    matched: bool
+    path: list[str] = []
+    score: float = 0.0
+    details: list[dict] = []
+
 class RuleTreeResponse(BaseModel):
     root: RuleResponse

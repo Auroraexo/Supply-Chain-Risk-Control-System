@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from app.api.deps import DBSession, AdminUser
+from app.api.deps import DBSession, AdminUser, CurrentUser
 from app.schemas.common import DataResponse, PaginatedResponse
-from app.schemas.rule import RuleCreateRequest, RuleUpdateRequest, RuleResponse, RuleTreeResponse, RuleToggleRequest, RuleVersionResponse
+from app.schemas.rule import RuleCreateRequest, RuleUpdateRequest, RuleResponse, RuleTreeResponse, RuleToggleRequest, RuleVersionResponse, RuleTestRequest
 from app.services.rule_service import RuleService
 from app.core.exceptions import AppException, NotFoundException
 
@@ -20,6 +20,16 @@ async def get_rule_tree(db: DBSession):
     service = RuleService(db)
     tree = await service.get_tree()
     return DataResponse(data=tree)
+
+@router.post("/test", response_model=DataResponse)
+async def test_rule_tree(req: RuleTestRequest, db: DBSession, user: CurrentUser):
+    """用给定数据测试规则树匹配（服务端评估，与规则引擎语义一致）。"""
+    try:
+        service = RuleService(db)
+        result = await service.test_tree(req.context)
+        return DataResponse(data=result)
+    except AppException as e:
+        raise HTTPException(status_code=e.status_code, detail={"code": e.code.value, "message": e.message, "detail": e.detail})
 
 @router.post("", response_model=DataResponse, status_code=201)
 async def create_rule(rule: RuleCreateRequest, db: DBSession, user: AdminUser):

@@ -21,8 +21,8 @@ router = APIRouter(prefix="/settings")
 
 # 运行时通知渠道配置（内存存储）
 _runtime_notification_channels: list[dict] = [
-    {"id": "1", "type": "email", "name": "邮件通知", "enabled": True, "config": "admin@example.com"},
-    {"id": "2", "type": "webhook", "name": "Webhook", "enabled": False, "config": "https://hooks.example.com/notify"},
+    {"id": "1", "type": "email", "name": "邮件通知", "enabled": False, "config": ""},
+    {"id": "2", "type": "webhook", "name": "Webhook", "enabled": False, "config": ""},
     {"id": "3", "type": "slack", "name": "Slack", "enabled": False, "config": ""},
 ]
 

@@ -13,6 +13,15 @@ class AnalysisRepository(BaseRepository[AnalysisResult]):
         result = await self.db.execute(select(AnalysisResult).where(AnalysisResult.request_id == request_id))
         return result.scalar_one_or_none()
 
+    async def get_by_request_or_id(self, identifier: str) -> AnalysisResult | None:
+        """按 request_id 或主键 id 查找（前端列表跳转传的是主键 id）。"""
+        result = await self.db.execute(
+            select(AnalysisResult).where(
+                (AnalysisResult.request_id == identifier) | (AnalysisResult.id == identifier)
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def get_by_raw_data_id(self, raw_data_id: str) -> list[AnalysisResult]:
         result = await self.db.execute(
             select(AnalysisResult).where(AnalysisResult.raw_data_id == raw_data_id).order_by(AnalysisResult.created_at.desc())

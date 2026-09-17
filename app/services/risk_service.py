@@ -302,9 +302,13 @@ class RiskService:
         }
 
     async def get_result(self, request_id: str) -> dict | None:
-        """获取分析结果。"""
+        """获取分析结果。
+
+        request_id 参数兼容主键 id：前端列表跳转传的是记录主键，
+        查到后统一用记录自身的 request_id 关联决策结果。
+        """
         t0 = time.monotonic()
-        analysis = await self.analysis_repo.get_by_request_id(request_id)
+        analysis = await self.analysis_repo.get_by_request_or_id(request_id)
 
         if not analysis:
             logger.debug(
@@ -314,8 +318,9 @@ class RiskService:
             )
             return None
 
-        # 同时获取决策结果
-        decision = await self.decision_repo.get_by_request_id(request_id)
+        # 统一用分析记录自身的 request_id 获取决策结果
+        actual_request_id = analysis.request_id
+        decision = await self.decision_repo.get_by_request_id(actual_request_id)
 
         logger.debug(
             "risk_service.result_fetched",

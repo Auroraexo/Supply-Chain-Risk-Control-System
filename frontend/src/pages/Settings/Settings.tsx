@@ -528,9 +528,17 @@ export function NotificationSettings() {
               <p className="text-caption text-text-muted mt-0.5">{channel.config || '未配置'}</p>
             </div>
             <button
-              onClick={() => handleToggle(channel.id)}
+              onClick={() => {
+                // 启用前必须有配置内容，避免开启无法投递的渠道
+                if (!channel.enabled && !(channel.config || '').trim()) {
+                  addToast({ type: 'error', title: '无法启用', message: `请先为「${channel.name}」填写配置信息（如邮箱地址、Webhook URL）` });
+                  return;
+                }
+                handleToggle(channel.id);
+              }}
+              aria-label={channel.enabled ? `禁用 ${channel.name}` : `启用 ${channel.name}`}
               className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${
-                channel.enabled ? 'bg-accent-blue' : 'bg-bg-tertiary'
+                channel.enabled ? 'bg-accent-amber' : 'bg-bg-tertiary'
               }`}
             >
               <span

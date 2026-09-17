@@ -49,7 +49,7 @@ export function NewAnalysisModal({ open, onClose, onDone }: NewAnalysisModalProp
     dataService
       .list({ page: 1, page_size: 100 })
       .then((res) => {
-        if (!cancelled) setItems(res?.data?.items || []);
+        if (!cancelled) setItems(res?.items || []);
       })
       .catch(() => {
         if (!cancelled) setError('原始数据列表加载失败，请检查后端服务');

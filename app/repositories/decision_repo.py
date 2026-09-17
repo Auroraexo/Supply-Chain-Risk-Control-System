@@ -11,6 +11,15 @@ class DecisionRepository(BaseRepository[DecisionResult]):
         result = await self.db.execute(select(DecisionResult).where(DecisionResult.request_id == request_id))
         return result.scalar_one_or_none()
 
+    async def get_by_request_or_id(self, identifier: str) -> DecisionResult | None:
+        """按 request_id 或主键 id 查找（前端列表跳转传的是主键 id）。"""
+        result = await self.db.execute(
+            select(DecisionResult).where(
+                (DecisionResult.request_id == identifier) | (DecisionResult.id == identifier)
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def get_pending_reviews(self, limit: int = 20) -> list[DecisionResult]:
         result = await self.db.execute(
             select(DecisionResult).where(DecisionResult.decision == DecisionEnum.PENDING_REVIEW).limit(limit)

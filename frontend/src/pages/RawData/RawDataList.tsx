@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Upload, Download, Eye } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
@@ -32,7 +32,7 @@ const columns: TableColumn<RawData>[] = [
     key: 'status',
     header: '状态',
     render: (row) => {
-      const cfg = statusConfig[row.status];
+      const cfg = statusConfig[row.status] || { label: row.status || '未知', variant: 'default' as const };
       return <Badge variant={cfg.variant} dot={row.status === 'processing'}>{cfg.label}</Badge>;
     },
   },
@@ -49,8 +49,11 @@ export function RawDataList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [drawerData, setDrawerData] = useState<RawData | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { addToast } = useToastStore();
   const navigate = useNavigate();
 
@@ -63,7 +66,7 @@ export function RawDataList() {
         page: 1,
         page_size: 50,
       });
-      setData(res?.data?.items || []);
+      setData(res?.items || []);
     } catch {
       addToast({ type: 'error', title: '加载失败', message: '无法获取数据列表' });
     } finally {
@@ -88,19 +91,100 @@ export function RawDataList() {
       setShowCreateModal(false);
       addToast({ type: 'success', title: '数据创建成功', message: '新的原始数据已提交' });
       fetchData();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number } };
+      const msg = axiosErr.response?.status === 409
+        ? '相同内容的记录已存在（数据哈希重复）'
+        : '数据提交失败，请重试';
+      addToast({ type: 'error', title: '创建失败', message: msg });
+    }
+  };
+
+  /** 批量导入：解析 JSON 数组文件（每项含 source_type / source_id / payload），逐条创建 */
+  const handleImportFile = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        addToast({ type: 'error', title: '导入失败', message: '文件不是合法的 JSON' });
+        return;
+      }
+      const rows = Array.isArray(parsed) ? parsed : [parsed];
+      if (rows.length === 0) {
+        addToast({ type: 'error', title: '导入失败', message: '文件中没有数据记录' });
+        return;
+      }
+      let ok = 0;
+      const failed: number[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i] as Record<string, unknown>;
+        try {
+          const payload = (row.payload && typeof row.payload === 'object' ? row.payload : { content: row.payload ?? row }) as Record<string, unknown>;
+          await dataService.create({
+            source_type: String(row.source_type || file.name.replace(/\.[^.]+$/, '')),
+            source_id: String(row.source_id || `import-${i + 1}`),
+            payload,
+          });
+          ok++;
+        } catch {
+          failed.push(i + 1);
+        }
+      }
+      if (failed.length === 0) {
+        addToast({ type: 'success', title: '导入完成', message: `成功导入 ${ok} 条数据` });
+      } else {
+        addToast({ type: 'error', title: '部分导入失败', message: `成功 ${ok} 条，失败 ${failed.length} 条（第 ${failed.slice(0, 5).join(', ')} 行等，可能内容重复）` });
+      }
+      fetchData();
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  /** 导出：把当前列表保存为 JSON 文件下载 */
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await dataService.list({ page: 1, page_size: 100 });
+      const items = res?.items || [];
+      if (items.length === 0) {
+        addToast({ type: 'info', title: '无数据可导出', message: '当前没有数据记录' });
+        return;
+      }
+      const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `raw-data-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast({ type: 'success', title: '导出成功', message: `已导出 ${items.length} 条数据` });
     } catch {
-      addToast({ type: 'error', title: '创建失败', message: '数据提交失败，请重试' });
+      addToast({ type: 'error', title: '导出失败', message: '无法获取数据，请稍后重试' });
+    } finally {
+      setExporting(false);
     }
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader eyebrow="Data Center" title="供应链数据中心" description="管理风险分析所需的供应商、库存与物流数据" actions={<>
-          <Button variant="outline" size="sm">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleImportFile(f); }}
+          />
+          <Button variant="outline" size="sm" loading={importing} onClick={() => fileInputRef.current?.click()}>
             <Upload size={16} />
             批量导入
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" loading={exporting} onClick={handleExport}>
             <Download size={16} />
             导出
           </Button>
