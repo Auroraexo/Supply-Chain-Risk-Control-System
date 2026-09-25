@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>供应链智能决策系统 - 业务流程全链路图</title>
+<style>
+  body { margin:0; padding:24px; background:#f8fafc; font-family:"Microsoft YaHei","PingFang SC",Segoe UI,sans-serif; }
+  h1 { text-align:center; color:#0f172a; margin:0 0 4px; font-size:22px; }
+  .sub { text-align:center; color:#64748b; margin-bottom:16px; font-size:13px; }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; justify-content:center; margin-bottom:16px; font-size:12px; color:#334155; }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .sw { display:inline-block; width:22px; height:14px; border:1.5px solid; border-radius:2px; }
+  .sw.term { border-radius:8px; background:#1e3a8a; border-color:#1e3a8a; }
+  .sw.proc { background:#dbeafe; border-color:#1e40af; }
+  .sw.dec  { background:#fef3c7; border-color:#b45309; transform:rotate(45deg); width:12px; height:12px; }
+  .sw.io   { background:#d1fae5; border-color:#047857; }
+  .sw.hum  { background:#ffedd5; border-color:#c2410c; }
+  .sw.store{ background:#e0e7ff; border-color:#4338ca; }
+  .canvas { background:#fff; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.04); }
+  svg { display:block; margin:0 auto; }
+  text { font-family:inherit; }
+</style>
+</head>
+<body>
+<h1>供应链智能决策系统 · 业务流程全链路图</h1>
+<div class="sub">Supply Chain Risk Control System — 多 Agent 协同 · 人工审核闭环 · 风险处置状态机 · 异步通知投递</div>
+<div class="legend">
+  <span><i class="sw term"></i>开始 / 结束</span>
+  <span><i class="sw proc"></i>处理步骤（Agent / 服务）</span>
+  <span><i class="sw dec"></i>判断分支</span>
+  <span><i class="sw io"></i>数据输入 / 输出</span>
+  <span><i class="sw hum"></i>人工 / 异常路径</span>
+  <span><i class="sw store"></i>数据存储 / 中间件</span>
+</div>
+<div class="canvas">
+<svg viewBox="0 0 1500 2420" width="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c2410c"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1e40af"/>
+    </marker>
+  </defs>
+
+  <!-- ============ 主纵轴 x=380 ============ -->
+
+  <!-- N1 开始 -->
+  <g>
+    <ellipse cx="380" cy="50" rx="90" ry="26" fill="#1e3a8a"/>
+    <text x="380" y="55" text-anchor="middle" fill="#fff" font-size="14" font-weight="600">开 始</text>
+  </g>
+  <line x1="380" y1="76" x2="380" y2="104" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- N2 输入 -->
+  <g>
+    <polygon points="240,108 520,108 500,164 220,164" fill="#d1fae5" stroke="#047857" stroke-width="1.5"/>
+    <text x="370" y="132" text-anchor="middle" font-size="13" font-weight="600" fill="#064e3b">外部提交风险事件</text>
+    <text x="370" y="152" text-anchor="middle" font-size="11.5" fill="#065f46">POST /risk/analyze · raw_data_id</text>
+  </g>
+  <line x1="370" y1="164" x2="370" y2="192" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- D1 Redis 锁 -->
+  <g>
+    <polygon points="370,196 490,240 370,284 250,240" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+    <text x="370" y="236" text-anchor="middle" font-size="12.5" font-weight="600" fill="#7c2d12">Redis 锁获取?</text>
+    <text x="370" y="254" text-anchor="middle" font-size="11" fill="#7c2d12">SET NX EX=330s</text>
+  </g>
+  <line x1="490" y1="240" x2="660" y2="240" stroke="#c2410c" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <text x="575" y="232" text-anchor="middle" font-size="11.5" fill="#c2410c" font-weight="600">否</text>
+  <!-- E1 -->
+  <g>
+    <rect x="660" y="214" width="180" height="52" rx="6" fill="#ffedd5" stroke="#c2410c" stroke-width="1.5"/>
+    <text x="750" y="236" text-anchor="middle" font-size="12" font-weight="600" fill="#7c2d12">409 冲突</text>
+    <text x="750" y="254" text-anchor="middle" font-size="11" fill="#9a3412">该数据正在分析中</text>
+  </g>
+  <line x1="370" y1="284" x2="370" y2="312" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="386" y="302" font-size="11.5" fill="#15803d" font-weight="600">是</text>
+
+  <!-- D2 缓存 -->
+  <g>
+    <polygon points="370,316 495,360 370,404 245,360" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+    <text x="370" y="354" text-anchor="middle" font-size="12.5" font-weight="600" fill="#7c2d12">已有分析结果?</text>
+    <text x="370" y="372" text-anchor="middle" font-size="11" fill="#7c2d12">且非 force_reanalyze</text>
+  </g>
+  <line x1="495" y1="360" x2="660" y2="360" stroke="#1e40af" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+  <text x="578" y="352" text-anchor="middle" font-size="11.5" fill="#1e40af" font-weight="600">是</text>
+  <g>
+    <rect x="660" y="334" width="200" height="52" rx="6" fill="#dbeafe" stroke="#1e40af" stroke-width="1.5"/>
+    <text x="760" y="356" text-anchor="middle" font-size="12" font-weight="600" fill="#1e3a8a">缓存命中</text>
+    <text x="760" y="374" text-anchor="middle" font-size="11" fill="#1e40af">直接返回 from_cache=true</text>
+  </g>
+  <line x1="370" y1="404" x2="370" y2="432" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="386" y="422" font-size="11.5" fill="#15803d" font-weight="600">否</text>
+
+  <!-- D3 数据存在 -->
+  <g>
+    <polygon points="370,436 485,478 370,520 255,478" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+    <text x="370" y="482" text-anchor="middle" font-size="12.5" font-weight="600" fill="#7c2d12">raw_data 存在?</text>
+  </g>
+  <line x1="485" y1="478" x2="660" y2="478" stroke="#c2410c" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <text x="572" y="470" text-anchor="middle" font-size="11.5" fill="#c2410c" font-weight="600">否</text>
+  <g>
+    <rect x="660" y="452" width="160" height="52" rx="6" fill="#ffedd5" stroke="#c2410c" stroke-width="1.5"/>
+    <text x="740" y="474" text-anchor="middle" font-size="12" font-weight="600" fill="#7c2d12">404 不存在</text>
+    <text x="740" y="492" text-anchor="middle" font-size="11" fill="#9a3412">NotFound 异常</text>
+  </g>
+  <line x1="370" y1="520" x2="370" y2="548" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="386" y="538" font-size="11.5" fill="#15803d" font-weight="600">是</text>
+
+  <!-- D4 状态 -->
+  <g>
+    <polygon points="370,552 485,594 370,636 255,594" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+    <text x="370" y="598" text-anchor="middle" font-size="12.5" font-weight="600" fill="#7c2d12">status = INVALID?</text>
+  </g>
+  <line x1="485" y1="594" x2="660" y2="594" stroke="#c2410c" stroke-width="1.5" marker-end="url(#arrowRed)"/>
+  <text x="572" y="586" text-anchor="middle" font-size="11.5" fill="#c2410c" font-weight="600">是</text>
+  <g>
+    <rect x="660" y="568" width="180" height="52" rx="6" fill="#ffedd5" stroke="#c2410c" stroke-width="1.5"/>
+    <text x="750" y="590" text-anchor="middle" font-size="12" font-weight="600" fill="#7c2d12">422 数据质量异常</text>
+    <text x="750" y="608" text-anchor="middle" font-size="11" fill="#9a3412">DataQualityException</text>
+  </g>
+  <line x1="370" y1="636" x2="370" y2="668" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="386" y="656" font-size="11.5" fill="#15803d" font-weight="600">否</text>
+
+  <!-- 阶段标签：Agent 决策图 -->
+  <g>
+    <rect x="80" y="660" width="120" height="24" rx="12" fill="#1e3a8a"/>
+    <text x="140" y="677" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">① Agent 决策图</text>
+  </g>
+
+  <!-- N5 Scout -->
+  <g>
+    <rect x="220" y="680" width="300" height="68" rx="6" fill="#dbeafe" stroke="#1e40af" stroke-width="1.6"/>
+    <text x="370" y="704" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">Scout Agent · 数据采集与质检</text>
+    <text x="370" y="724" text-anchor="middle" font-size="11" fill="#1e40af">取数 → 结构化 facts → check_data_quality</text>
+    <text x="370" y="740" text-anchor="middle" font-size="11" fill="#1e40af">输出 quality_score / missing_fields</text>
+  </g>
+  <line x1="370" y1="748" x2="370" y2="778" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- D5 Scout 路由 -->
+  <g>
+    <polygon points="370,782 510,830 370,878 230,830" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+    <text x="370" y="820" text-anchor="middle" font-size="12.5" font-weight="600" fill="#7c2d12">Scout 后路由</text>
+    <text x="370" y="838" text-anchor="middle" font-size="10.5" fill="#7c2d12">status=FAILED / quality&lt;0.5</text>
+    <text x="370" y="853" text-anchor="middle" font-size="10.5" fill="#7c2d12">/ retry&gt;2 ?</text>
+  </g>
+  <!-- 人工异常汇流竖线 x=920（泳道内左侧，避开所有节点） -->
+  <line x1="920" y1="854" x2="920" y2="1536" stroke="#c2410c" stroke-width="1.4" stroke-dasharray="6,4"/>
+  <line x1="920" y1="854" x2="980" y2="854" stroke="#c2410c" stroke-width="1.4" stroke-dasharray="6,4" marker-end="url(#arrowRed)"/>
+
+  <!-- D5 任一命中 → 人工 -->
+  <path d="M510,830 L920,830 L920,854" stroke="#c2410c" stroke-width="1.5" fill="none" stroke-dasharray="6,4"/>
+  <text x="700" y="822" font-size="11.5" fill="#c2410c" font-weight="600">任一命中 → 人工审核</text>
+  <line x1="370" y1="878" x2="370" y2="908" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="386" y="896" font-size="11.5" fill="#15803d" font-weight="600">否</text>
+
+  <!-- N6 Analyst -->
+  <g>
+    <rect x="210" y="912" width="320" height="74" rx="6" fill="#dbeafe" stroke="#1e40af" stroke-width="1.6"/>
+    <text x="370" y="936" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">Analyst Agent · 风险评分</text>
+    <text x="370" y="954" text-anchor="middle" font-size="11" fill="#1e40af">参数: delay / price_dev / rating / incidents</text>
+    <text x="370" y="970" text-anchor="middle" font-size="11" fill="#1e40af">历史相似度加权(≤+20) → 0-100 分</text>
+    <text x="370" y="984" text-anchor="middle" font-size="10.5" fill="#1e40af">等级: &gt;70 critical / &gt;50 high / &gt;30 medium / else low</text>
+  </g>
+  <line x1="370" y1="986" x2="370" y2="1016" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- D6 Analyst 路由 -->
+  <g>
+    <polygon points="370,1020 520,1074 370,1128 220,1074" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+    <text x="370" y="1056" text-anchor="middle" font-size="12.5" font-weight="600" fill="#7c2d12">Analyst 后路由</text>
+    <text x="370" y="1074" text-anchor="middle" font-size="10.5" fill="#7c2d12">FAILED / retry&gt;3?</text>
+    <text x="370" y="1090" text-anchor="middle" font-size="10.5" fill="#7c2d12">high / critical?</text>
+  </g>
+  <!-- FAILED/retry>3 → 人工 -->
+  <path d="M520,1074 L920,1074" stroke="#c2410c" stroke-width="1.5" fill="none" stroke-dasharray="6,4"/>
+  <text x="700" y="1066" font-size="11.5" fill="#c2410c" font-weight="600">失败/重试超限 → 人工</text>
+  <!-- high/critical → Reflection (下) -->
+  <line x1="370" y1="1128" x2="370" y2="1160" stroke="#b45309" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="386" y="1146" font-size="11.5" fill="#b45309" font-weight="600">high/critical</text>
+  <!-- low/medium → Decider (右绕) -->
+  <path d="M220,1074 L120,1074 L120,1380 L220,1380" stroke="#15803d" stroke-width="1.6" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="100" y="1220" font-size="11.5" fill="#15803d" font-weight="600" writing-mode="tb">low/medium → 直接决策</text>
+
+  <!-- N7 Reflection -->
+  <g>
+    <rect x="220" y="1164" width="300" height="68" rx="6" fill="#dbeafe" stroke="#1e40af" stroke-width="1.6"/>
+    <text x="370" y="1188" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">Reflection Agent · 高风险复核</text>
+    <text x="370" y="1206" text-anchor="middle" font-size="11" fill="#1e40af">① 分&gt;80 且 置信&lt;0.7  → 不通过</text>
+    <text x="370" y="1222" text-anchor="middle" font-size="11" fill="#1e40af">② facts 为空 → 不通过</text>
+  </g>
+  <line x1="370" y1="1232" x2="370" y2="1260" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- D7 Reflection 路由 -->
+  <g>
+    <polygon points="370,1264 490,1308 370,1352 250,1308" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+    <text x="370" y="1304" text-anchor="middle" font-size="12.5" font-weight="600" fill="#7c2d12">reflection.passed?</text>
+  </g>
+  <line x1="490" y1="1308" x2="920" y2="1308" stroke="#c2410c" stroke-width="1.5" stroke-dasharray="6,4" fill="none"/>
+  <text x="650" y="1300" font-size="11.5" fill="#c2410c" font-weight="600">否 → 人工</text>
+  <line x1="370" y1="1352" x2="370" y2="1380" stroke="#15803d" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="386" y="1370" font-size="11.5" fill="#15803d" font-weight="600">是</text>
+
+  <!-- N8 Decider -->
+  <g>
+    <rect x="210" y="1384" width="320" height="78" rx="6" fill="#dbeafe" stroke="#1e40af" stroke-width="1.6"/>
+    <text x="370" y="1408" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">Decider Agent · 决策</text>
+    <text x="370" y="1426" text-anchor="middle" font-size="11" fill="#1e40af">规则引擎(RuleLoader 决策树) 优先</text>
+    <text x="370" y="1442" text-anchor="middle" font-size="11" fill="#1e40af">未命中→矩阵兜底: &lt;30 approve / &lt;50 approve</text>
+    <text x="370" y="1456" text-anchor="middle" font-size="11" fill="#1e40af">&lt;70 escalate / ≥70 reject；反思未过置信-0.15</text>
+  </g>
+  <line x1="370" y1="1462" x2="370" y2="1490" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- D8 Decider 路由 -->
+  <g>
+    <polygon points="370,1494 490,1536 370,1578 250,1536" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+    <text x="370" y="1532" text-anchor="middle" font-size="12.5" font-weight="600" fill="#7c2d12">status = FAILED?</text>
+  </g>
+  <line x1="490" y1="1536" x2="920" y2="1536" stroke="#c2410c" stroke-width="1.5" stroke-dasharray="6,4" fill="none"/>
+  <text x="650" y="1528" font-size="11.5" fill="#c2410c" font-weight="600">是 → 人工</text>
+  <line x1="370" y1="1578" x2="370" y2="1606" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+  <text x="386" y="1596" font-size="11.5" fill="#15803d" font-weight="600">否</text>
+
+  <!-- N9 持久化 -->
+  <g>
+    <rect x="200" y="1610" width="340" height="62" rx="6" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.6"/>
+    <text x="370" y="1634" text-anchor="middle" font-size="13" font-weight="700" fill="#312e81">② 结果持久化（事务提交）</text>
+    <text x="370" y="1652" text-anchor="middle" font-size="11" fill="#3730a3">写 AnalysisResult + DecisionResult</text>
+    <text x="370" y="1666" text-anchor="middle" font-size="11" fill="#3730a3">RawData → PROCESSED；HUMAN_REVIEW → decision=pending_review</text>
+  </g>
+  <line x1="370" y1="1672" x2="370" y2="1700" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- D9 是否通知 -->
+  <g>
+    <polygon points="370,1704 500,1748 370,1792 240,1748" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+    <text x="370" y="1742" text-anchor="middle" font-size="12" font-weight="600" fill="#7c2d12">HUMAN_REVIEW 或</text>
+    <text x="370" y="1758" text-anchor="middle" font-size="12" font-weight="600" fill="#7c2d12">high / critical ?</text>
+  </g>
+  <line x1="240" y1="1748" x2="120" y2="1748" stroke="#c2410c" stroke-width="1.6" fill="none" marker-end="url(#arrowRed)"/>
+  <text x="160" y="1740" font-size="11.5" fill="#c2410c" font-weight="600">是</text>
+
+  <!-- N10 自动结束 -->
+  <g>
+    <ellipse cx="370" cy="1840" rx="130" ry="30" fill="#065f46"/>
+    <text x="370" y="1836" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">自动决策完成</text>
+    <text x="370" y="1854" text-anchor="middle" fill="#d1fae5" font-size="11">输出 approve / reject / escalate</text>
+  </g>
+  <line x1="370" y1="1792" x2="370" y2="1810" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- ============ 右侧人工审核泳道 ============ -->
+  <g>
+    <rect x="900" y="780" width="560" height="780" rx="10" fill="none" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4,4"/>
+    <text x="920" y="802" font-size="13" font-weight="700" fill="#c2410c">③ 人工审核 &amp; 风险处置闭环（异步）</text>
+  </g>
+
+  <!-- H0 HumanReview 挂起 -->
+  <g>
+    <rect x="980" y="820" width="320" height="68" rx="6" fill="#ffedd5" stroke="#c2410c" stroke-width="1.6"/>
+    <text x="1140" y="844" text-anchor="middle" font-size="13" font-weight="700" fill="#7c2d12">HumanReview · 流程挂起</text>
+    <text x="1140" y="862" text-anchor="middle" font-size="11" fill="#9a3412">status=HUMAN_REVIEW · decision=pending_review</text>
+    <text x="1140" y="878" text-anchor="middle" font-size="11" fill="#9a3412">汇总触发原因并记录审计日志</text>
+  </g>
+  <line x1="1140" y1="888" x2="1140" y2="916" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- H1 待审列表 -->
+  <g>
+    <rect x="1000" y="920" width="280" height="50" rx="6" fill="#dbeafe" stroke="#1e40af" stroke-width="1.5"/>
+    <text x="1140" y="942" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1e3a8a">decider / admin 拉取待审列表</text>
+    <text x="1140" y="960" text-anchor="middle" font-size="11" fill="#1e40af">GET /review/pending</text>
+  </g>
+  <line x1="1140" y1="970" x2="1140" y2="998" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- H2 审核动作判断 -->
+  <g>
+    <polygon points="1140,1002 1260,1050 1140,1098 1020,1050" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+    <text x="1140" y="1046" text-anchor="middle" font-size="12.5" font-weight="600" fill="#7c2d12">人工审核动作?</text>
+  </g>
+
+  <!-- 三个分支 -->
+  <line x1="1020" y1="1050" x2="940" y2="1050" stroke="#475569" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="975" y="1042" text-anchor="middle" font-size="11" fill="#334155">approve</text>
+  <g>
+    <rect x="850" y="1024" width="90" height="52" rx="6" fill="#d1fae5" stroke="#047857" stroke-width="1.4"/>
+    <text x="895" y="1046" text-anchor="middle" font-size="11.5" font-weight="600" fill="#064e3b">通过</text>
+    <text x="895" y="1064" text-anchor="middle" font-size="10.5" fill="#065f46">→ approve</text>
+  </g>
+
+  <line x1="1260" y1="1050" x2="1330" y2="1050" stroke="#475569" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="1295" y="1042" text-anchor="middle" font-size="11" fill="#334155">reject</text>
+  <g>
+    <rect x="1330" y="1024" width="110" height="52" rx="6" fill="#ffedd5" stroke="#c2410c" stroke-width="1.4"/>
+    <text x="1385" y="1046" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7c2d12">驳回</text>
+    <text x="1385" y="1062" text-anchor="middle" font-size="10.5" fill="#9a3412">必填理由→reject</text>
+  </g>
+
+  <line x1="1140" y1="1098" x2="1140" y2="1128" stroke="#475569" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="1155" y="1118" font-size="11" fill="#334155">override</text>
+  <g>
+    <rect x="1040" y="1132" width="200" height="50" rx="6" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.4"/>
+    <text x="1140" y="1154" text-anchor="middle" font-size="11.5" font-weight="600" fill="#312e81">人工覆盖</text>
+    <text x="1140" y="1170" text-anchor="middle" font-size="10.5" fill="#3730a3">必填理由+目标决策(approve/reject/escalate)</text>
+  </g>
+
+  <!-- 汇总到 AuditEvent -->
+  <path d="M895,1076 L895,1220 L1080,1220" stroke="#475569" stroke-width="1.4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1385,1076 L1385,1220 L1200,1220" stroke="#475569" stroke-width="1.4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1140,1182 L1140,1210" stroke="#475569" stroke-width="1.4" marker-end="url(#arrow)"/>
+
+  <!-- H3 AuditEvent -->
+  <g>
+    <rect x="1000" y="1210" width="280" height="50" rx="6" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.5"/>
+    <text x="1140" y="1232" text-anchor="middle" font-size="12.5" font-weight="600" fill="#312e81">写不可变 AuditEvent</text>
+    <text x="1140" y="1250" text-anchor="middle" font-size="11" fill="#3730a3">reviewed_by · revision+1 · before/after/comment</text>
+  </g>
+  <line x1="1140" y1="1260" x2="1140" y2="1288" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- H4 处置状态机 -->
+  <g>
+    <rect x="960" y="1292" width="360" height="118" rx="6" fill="#fff7ed" stroke="#c2410c" stroke-width="1.6"/>
+    <text x="1140" y="1314" text-anchor="middle" font-size="12.5" font-weight="700" fill="#7c2d12">风险处置 case_status 状态机</text>
+    <text x="1140" y="1334" text-anchor="middle" font-size="11.5" fill="#9a3412">open → in_progress → resolved → closed</text>
+    <text x="1140" y="1354" text-anchor="middle" font-size="10.5" fill="#9a3412">· 非 open 必须指定负责人 owner + 截止 due_at</text>
+    <text x="1140" y="1370" text-anchor="middle" font-size="10.5" fill="#9a3412">· resolved/closed 必须填整改结果及证据 resolution</text>
+    <text x="1140" y="1386" text-anchor="middle" font-size="10.5" fill="#9a3412">· closed 前须完成决策审核；closed→open 仅 admin</text>
+    <text x="1140" y="1402" text-anchor="middle" font-size="10.5" fill="#9a3412">· revision 乐观锁；跳步返回 422</text>
+  </g>
+  <line x1="1140" y1="1410" x2="1140" y2="1438" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- H5 闭环结束 -->
+  <g>
+    <ellipse cx="1140" cy="1468" rx="120" ry="26" fill="#065f46"/>
+    <text x="1140" y="1473" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">风险闭环关闭</text>
+  </g>
+
+  <!-- ============ 底部异步通知泳道 ============ -->
+  <g>
+    <rect x="60" y="1920" width="1380" height="280" rx="10" fill="none" stroke="#4338ca" stroke-width="1.2" stroke-dasharray="4,4"/>
+    <text x="80" y="1944" font-size="13" font-weight="700" fill="#4338ca">④ 高风险通知投递（Outbox → RabbitMQ → Worker，at-least-once）</text>
+  </g>
+
+  <!-- Outbox -->
+  <g>
+    <ellipse cx="180" cy="2030" rx="90" ry="44" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.6"/>
+    <text x="180" y="2024" text-anchor="middle" font-size="12.5" font-weight="700" fill="#312e81">NotificationOutbox</text>
+    <text x="180" y="2042" text-anchor="middle" font-size="10.5" fill="#3730a3">DB 持久化 · status=pending</text>
+    <text x="180" y="2058" text-anchor="middle" font-size="10.5" fill="#3730a3">高风险/待审时写入</text>
+  </g>
+  <line x1="270" y1="2030" x2="370" y2="2030" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Worker 扫描 -->
+  <g>
+    <rect x="370" y="1996" width="220" height="68" rx="6" fill="#dbeafe" stroke="#1e40af" stroke-width="1.6"/>
+    <text x="480" y="2020" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1e3a8a">Worker 轮询（每 10s）</text>
+    <text x="480" y="2038" text-anchor="middle" font-size="11" fill="#1e40af">SELECT pending FOR UPDATE SKIP LOCKED</text>
+    <text x="480" y="2054" text-anchor="middle" font-size="11" fill="#1e40af">attempts≥5 → failed</text>
+  </g>
+  <line x1="590" y1="2030" x2="680" y2="2030" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- RabbitMQ -->
+  <g>
+    <rect x="680" y="1996" width="180" height="68" rx="6" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.6"/>
+    <text x="770" y="2020" text-anchor="middle" font-size="12.5" font-weight="700" fill="#312e81">RabbitMQ</text>
+    <text x="770" y="2038" text-anchor="middle" font-size="11" fill="#3730a3">risk_alert.high/normal.v2</text>
+    <text x="770" y="2054" text-anchor="middle" font-size="11" fill="#3730a3">持久消息 + 重试/死信队列</text>
+  </g>
+  <line x1="860" y1="2030" x2="950" y2="2030" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Consumer -->
+  <g>
+    <rect x="950" y="1996" width="200" height="68" rx="6" fill="#dbeafe" stroke="#1e40af" stroke-width="1.6"/>
+    <text x="1050" y="2020" text-anchor="middle" font-size="12.5" font-weight="700" fill="#1e3a8a">Consumer 投递</text>
+    <text x="1050" y="2038" text-anchor="middle" font-size="11" fill="#1e40af">Redis 锁防重 + 渠道去重键 7d</text>
+    <text x="1050" y="2054" text-anchor="middle" font-size="11" fill="#1e40af">失败 attempts&lt;3 重试 / ≥3 DLQ</text>
+  </g>
+  <line x1="1150" y1="2030" x2="1230" y2="2030" stroke="#475569" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Channels -->
+  <g>
+    <rect x="1230" y="1996" width="180" height="68" rx="6" fill="#d1fae5" stroke="#047857" stroke-width="1.6"/>
+    <text x="1320" y="2020" text-anchor="middle" font-size="12.5" font-weight="700" fill="#064e3b">通知渠道</text>
+    <text x="1320" y="2038" text-anchor="middle" font-size="11" fill="#065f46">Email (SMTP) / Webhook</text>
+    <text x="1320" y="2054" text-anchor="middle" font-size="11" fill="#065f46">Slack · 写 notification.delivered 审计</text>
+  </g>
+
+  <!-- 高风险触发自 D9 -->
+  <path d="M120,1748 L120,2030 L90,2030" stroke="#c2410c" stroke-width="1.4" stroke-dasharray="5,4" fill="none" marker-end="url(#arrowRed)"/>
+  <text x="90" y="1900" font-size="11" fill="#c2410c" font-weight="600">触发写入</text>
+
+  <!-- 底部说明 -->
+  <text x="750" y="2260" text-anchor="middle" font-size="12" fill="#64748b">
+    全链路以 request_id 串联：Agent 执行日志（agent_execution_logs）+ 不可变审计事件（audit_events）保证可追溯；Redis 锁 / Outbox / MQ 重试与死信保证投递可靠。
+  </text>
+</svg>
+</div>
+</body>
+</html>
