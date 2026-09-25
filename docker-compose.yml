@@ -9,17 +9,20 @@ services:
     container_name: supply-chain-app
     ports:
       - "8000:8000"
-    environment:
+    environment: &app-environment
       - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DATABASE_URL=mysql+asyncmy://root:${MYSQL_ROOT_PASSWORD:-password}@mysql:3306/supply_chain_risk
+      - DATABASE_URL=mysql+asyncmy://${MYSQL_USER:-supply_chain_app}:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}@mysql:3306/supply_chain_risk
       - REDIS_URL=redis://redis:6379/0
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-supply_chain_app}:${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}@rabbitmq:5672/
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY}
+      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:?Set SETTINGS_ENCRYPTION_KEY}
       - LLM_PROVIDER=${LLM_PROVIDER:-openai}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
       - LLM_API_KEY=${LLM_API_KEY:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       redis:
@@ -39,16 +42,31 @@ services:
       start_period: 10s
 
   # === MySQL 8.0 ===
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      - ENVIRONMENT=migration
+      - DATABASE_URL=${MIGRATION_DATABASE_URL:?Set MIGRATION_DATABASE_URL}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - supply-chain-network
+
   mysql:
     image: mysql:8.0
     container_name: supply-chain-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER:-supply_chain_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD}
       MYSQL_DATABASE: supply_chain_risk
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -66,7 +84,7 @@ services:
     image: redis:7-alpine
     container_name: supply-chain-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -83,11 +101,11 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: supply-chain-rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-supply_chain_app}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     restart: unless-stopped
@@ -98,6 +116,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  notification-worker:
+    build: .
+    command: ["python", "-m", "app.workers.notifications"]
+    environment: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - supply-chain-network
 
   # === Nginx 反向代理 ===
   nginx:

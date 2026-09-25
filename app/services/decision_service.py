@@ -3,9 +3,13 @@
 负责决策的生成、查询、追踪和人工审核。
 优先从 Agent 流程已持久化的结果中读取，必要时重新运行决策流程。
 """
+
 import time
 import json
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.models.audit_event import AuditEvent
+from app.core.exceptions import ValidationException, AppException
 from app.repositories.analysis_repo import AnalysisRepository
 from app.repositories.decision_repo import DecisionRepository
 from app.repositories.agent_log_repo import AgentLogRepository
@@ -131,6 +135,15 @@ class DecisionService:
             "decision_path": decision.decision_path or [],
             "reflection_passed": decision.reflection_passed,
             "reviewed_by": decision.reviewed_by,
+            "id": decision.id,
+            "analysis_id": decision.analysis_id,
+            "created_at": decision.created_at.isoformat(),
+            "updated_at": decision.updated_at.isoformat() if decision.updated_at else None,
+            "case_status": decision.case_status,
+            "owner_id": decision.owner_id,
+            "due_at": decision.due_at.isoformat() if decision.due_at else None,
+            "resolution": decision.resolution,
+            "revision": decision.revision,
         }
 
     async def get_trace(self, request_id: str) -> dict:
@@ -167,7 +180,9 @@ class DecisionService:
 
     async def get_pending_reviews(self, page: int = 1, page_size: int = 20) -> dict:
         """获取待审核列表。"""
-        pending = await self.decision_repo.get_pending_reviews(limit=page_size)
+        pending = await self.decision_repo.get_pending_reviews(
+            limit=page_size, offset=(page - 1) * page_size
+        )
         return {
             "items": [
                 {
@@ -178,17 +193,42 @@ class DecisionService:
                 }
                 for d in pending
             ],
-            "total": len(pending),
+            "total": await self.decision_repo.count_pending_reviews(),
         }
 
-    async def submit_review(self, request_id: str, action: str, reviewer: str, comment: str | None = None, override_decision: str | None = None) -> dict:
+    async def submit_review(
+        self,
+        request_id: str,
+        action: str,
+        reviewer: str,
+        comment: str | None = None,
+        override_decision: str | None = None,
+    ) -> dict:
         """提交人工审核结果。
 
         request_id 参数兼容主键 id：前端审批页路由参数是记录主键。
         """
-        decision = await self.decision_repo.get_by_request_or_id(request_id)
+        decision = (
+            await self.db.execute(
+                select(DecisionResult)
+                .where(
+                    (DecisionResult.request_id == request_id) | (DecisionResult.id == request_id)
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
         if not decision:
             raise NotFoundException(f"决策结果未找到: {request_id}")
+
+        if decision.decision not in (DecisionModel.PENDING_REVIEW, DecisionModel.ESCALATE):
+            raise AppException(message="该决策已审核，请刷新后查看最新结果", status_code=409)
+        if action not in ("approve", "reject", "override"):
+            raise ValidationException("未知审核动作")
+        if action in ("reject", "override") and not (comment or "").strip():
+            raise ValidationException("驳回和覆盖必须填写理由")
+        if action == "override" and override_decision not in ("approve", "reject", "escalate"):
+            raise ValidationException("覆盖决策只能为 approve/reject/escalate")
+        previous = decision.decision.value
 
         if action == "approve":
             decision.decision = DecisionModel.APPROVE
@@ -198,12 +238,18 @@ class DecisionService:
             decision.decision = DecisionModel(override_decision)
 
         decision.reviewed_by = reviewer
-        decision.confidence = 1.0
-        await self.decision_repo.update(decision.id, {
-            "decision": decision.decision,
-            "reviewed_by": reviewer,
-            "confidence": 1.0,
-        })
+        decision.revision += 1
+        # Human approval is not model confidence: preserve the original score.
+        self.db.add(
+            AuditEvent(
+                entity_id=decision.id,
+                action=f"review.{action}",
+                actor=reviewer,
+                before={"decision": previous},
+                after={"decision": decision.decision.value},
+                comment=comment,
+            )
+        )
         await self.db.commit()
 
         logger.info(

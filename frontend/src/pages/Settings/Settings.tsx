@@ -10,6 +10,7 @@ import { Save, Cpu, RefreshCw, Bell, Loader2, Server, Database, Download, Extern
 import { settingsService } from '@/services/settingsService';
 import type { NotificationChannel, OllamaModelInfo } from '@/services/settingsService';
 import { UserManagement } from './UserManagement';
+import { AuditPanel } from '@/components/business/AuditPanel';
 
 const settingsTabs = [
   { key: 'llm', label: '模型配置' },
@@ -20,6 +21,7 @@ const settingsTabs = [
 
 export function LLMConfig() {
   const [config, setConfig] = useState({
+    version: 0,
     provider: 'local',
     model: '',
     api_key: '',
@@ -49,6 +51,7 @@ export function LLMConfig() {
         const res = await settingsService.getLLMConfig();
         if (res.data) {
           setConfig({
+            version: res.data.version || 0,
             provider: res.data.provider || 'local',
             model: res.data.model || '',
             api_key: res.data.api_key || '',
@@ -93,7 +96,8 @@ export function LLMConfig() {
     }
     setSaving(true);
     try {
-      await settingsService.updateLLMConfig(config);
+      const res = await settingsService.updateLLMConfig(config);
+      setConfig((prev) => ({ ...prev, version: res.data.version, api_key: res.data.api_key }));
       addToast({ type: 'success', title: '配置已保存', message: 'LLM配置更新成功' });
     } catch {
       addToast({ type: 'error', title: '保存失败', message: 'LLM配置保存失败' });
@@ -205,7 +209,7 @@ export function LLMConfig() {
             { value: 'anthropic', label: 'Anthropic (Claude)' },
           ]}
           value={config.provider}
-          onChange={(e) => setConfig({ ...config, provider: e.target.value })}
+          onChange={(e) => setConfig({ ...config, provider: e.target.value, api_key: '', model: '', base_url: '', smart_routing: false })}
         />
 
         {isLocal ? (
@@ -452,6 +456,7 @@ export function LLMConfig() {
 }
 
 export function NotificationSettings() {
+  const [version, setVersion] = useState(0);
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -463,6 +468,7 @@ export function NotificationSettings() {
         const res = await settingsService.getNotificationSettings();
         if (res.data?.channels) {
           setChannels(res.data.channels);
+          setVersion(res.data.version || 0);
         }
       } catch {
         addToast({ type: 'error', title: '加载失败', message: '无法获取通知设置' });
@@ -482,7 +488,8 @@ export function NotificationSettings() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await settingsService.updateNotificationSettings({ channels });
+      const res = await settingsService.updateNotificationSettings({ channels, version });
+      setVersion(res.data.version || 0);
       addToast({ type: 'success', title: '通知设置已保存', message: '通知渠道配置已更新' });
     } catch {
       addToast({ type: 'error', title: '保存失败', message: '通知设置保存失败' });
@@ -525,7 +532,7 @@ export function NotificationSettings() {
           >
             <div className="flex-1">
               <p className="text-body font-medium text-text-primary">{channel.name}</p>
-              <p className="text-caption text-text-muted mt-0.5">{channel.config || '未配置'}</p>
+              <Input aria-label={`${channel.name}配置`} value={channel.config} placeholder={channel.type === 'email' ? '接收邮箱地址' : 'HTTPS Webhook 地址'} onChange={e => setChannels(prev => prev.map(c => c.id === channel.id ? { ...c, config: e.target.value } : c))} />
             </div>
             <button
               onClick={() => {
@@ -570,25 +577,7 @@ export function Settings() {
         {activeTab === 'llm' && <LLMConfig />}
         {activeTab === 'notifications' && <NotificationSettings />}
         {activeTab === 'users' && <UserManagement />}
-        {activeTab === 'logs' && (
-          <Card>
-            <h3 className="text-h3 text-text-primary mb-4">操作日志</h3>
-            <div className="space-y-2">
-              {[
-                { time: '2026-08-07 10:36:00', user: 'admin', action: '审批决策 REQ-001', status: 'success' },
-                { time: '2026-08-07 10:00:00', user: 'admin', action: '更新规则版本至 v2.1.0', status: 'success' },
-                { time: '2026-08-07 09:15:00', user: 'analyst', action: '提交分析任务 REQ-002', status: 'success' },
-              ].map((log, i) => (
-                <div key={i} className="flex items-center gap-3 py-2 px-3 rounded-btn bg-bg-primary/50 text-caption">
-                  <span className="text-text-muted w-36">{log.time}</span>
-                  <span className="text-text-primary font-medium w-20">{log.user}</span>
-                  <span className="text-text-secondary flex-1">{log.action}</span>
-                  <span className="text-risk-low">✓</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
+        {activeTab === 'logs' && <AuditPanel />}
       </div>
     </div>
   );

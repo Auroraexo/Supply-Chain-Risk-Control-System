@@ -11,6 +11,7 @@ export interface NotificationChannel {
 
 export interface NotificationSettings {
   channels: NotificationChannel[];
+  version?: number;
 }
 
 interface LLMTestResult {

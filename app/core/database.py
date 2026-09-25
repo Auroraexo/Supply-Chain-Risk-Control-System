@@ -52,13 +52,21 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI 依赖注入：获取数据库会话。"""
     factory = get_session_factory()
     session = factory()
+    from app.core.config import request_llm_config
+    from app.services.settings_service import SettingsService
+
+    config_token = None
     try:
+        saved_config, _ = await SettingsService(session).read("llm")
+        config_token = request_llm_config.set(saved_config or {})
         yield session
         await session.commit()
     except Exception:
         await session.rollback()
         raise
     finally:
+        if config_token is not None:
+            request_llm_config.reset(config_token)
         await session.close()
 
 

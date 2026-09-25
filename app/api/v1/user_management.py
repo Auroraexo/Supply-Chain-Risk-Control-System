@@ -10,6 +10,8 @@ from app.schemas.common import DataResponse, PaginatedResponse
 from app.models.user import User, UserRole
 from app.repositories.user_repo import UserRepository
 from app.core.security import hash_password
+from app.core.redis import get_redis
+from app.models.audit_event import AuditEvent
 
 router = APIRouter(prefix="/users")
 
@@ -17,7 +19,7 @@ router = APIRouter(prefix="/users")
 @router.get("", response_model=PaginatedResponse)
 async def list_users(
     db: DBSession,
-    _admin: AdminUser,
+    admin: AdminUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     role: str | None = None,
@@ -48,9 +50,9 @@ async def list_users(
 @router.post("", response_model=DataResponse, status_code=201)
 async def create_user(
     db: DBSession,
-    _admin: AdminUser,
+    admin: AdminUser,
     username: str = Query(..., min_length=2, max_length=50),
-    email: str = Query(..., pattern=r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'),
+    email: str = Query(..., pattern=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"),
     password: str = Query(..., min_length=6, max_length=128),
     role: str = Query("analyst"),
 ):
@@ -77,6 +79,14 @@ async def create_user(
         role=user_role,
     )
     user = await repo.create(user)
+    db.add(
+        AuditEvent(
+            entity_id=user.id,
+            action="user.create",
+            actor=admin["sub"],
+            after={"role": user.role.value},
+        )
+    )
     return DataResponse(data=_serialize_user(user), message="用户创建成功")
 
 
@@ -84,7 +94,7 @@ async def create_user(
 async def update_user(
     user_id: str,
     db: DBSession,
-    _admin: AdminUser,
+    admin: AdminUser,
     email: str | None = None,
     role: str | None = None,
     is_active: bool | None = None,
@@ -95,6 +105,7 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
+    before = {"email": user.email, "role": user.role.value, "is_active": user.is_active}
     if email is not None:
         existing_email = await repo.get_by_email(email)
         if existing_email and existing_email.id != user_id:
@@ -112,20 +123,54 @@ async def update_user(
 
     await db.flush()
     await db.refresh(user)
+    if (is_active is False or role is not None) and user_id != admin["sub"]:
+        redis = await get_redis()
+        async for key in redis.scan_iter("session:*"):
+            import json
+
+            value = await redis.get(key)
+            if value and json.loads(value).get("sub") == user_id:
+                await redis.delete(key)
+    db.add(
+        AuditEvent(
+            entity_id=user.id,
+            action="user.update",
+            actor=admin["sub"],
+            before=before,
+            after={"email": user.email, "role": user.role.value, "is_active": user.is_active},
+        )
+    )
     return DataResponse(data=_serialize_user(user), message="用户更新成功")
 
 
 @router.delete("/{user_id}", response_model=DataResponse)
-async def delete_user(user_id: str, db: DBSession, _admin: AdminUser):
+async def delete_user(user_id: str, db: DBSession, admin: AdminUser):
     """删除用户（仅 Admin）。"""
     repo = UserRepository(db)
     user = await repo.get_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
+    if user_id == admin["sub"]:
+        raise HTTPException(status_code=422, detail="不能删除当前登录账号")
 
-    await db.delete(user)
+    db.add(
+        AuditEvent(
+            entity_id=user.id,
+            action="user.deactivate",
+            actor=admin["sub"],
+            before={"role": user.role.value},
+        )
+    )
+    user.is_active = False
+    redis = await get_redis()
+    async for key in redis.scan_iter("session:*"):
+        import json
+
+        value = await redis.get(key)
+        if value and json.loads(value).get("sub") == user_id:
+            await redis.delete(key)
     await db.flush()
-    return DataResponse(message="用户已删除")
+    return DataResponse(message="用户已停用，历史审计记录已保留")
 
 
 def _serialize_user(user: User) -> dict:

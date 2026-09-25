@@ -2,9 +2,16 @@
 
 提供风险评估的核心业务逻辑，协调数据采集、规则匹配和 Agent 决策。
 """
+
 import time
 import uuid
 import json
+import asyncio
+import hashlib
+from sqlalchemy import select
+from app.core.config import get_effective_llm_config
+from app.core.redis import get_redis
+from app.models.rule_node import RuleNode
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.raw_data_repo import RawDataRepository
@@ -33,6 +40,42 @@ class RiskService:
         self.decision_repo = DecisionRepository(db)
 
     async def analyze(self, raw_data_id: str, force_reanalyze: bool = False) -> dict:
+        redis = await get_redis()
+        lock = f"analysis-lock:{raw_data_id}"
+        token = uuid.uuid4().hex
+        if not await redis.set(lock, token, nx=True, ex=330):
+            raise AppException(message="该数据正在分析中，请稍后查询结果", status_code=409)
+        try:
+            async with asyncio.timeout(300):
+                if not force_reanalyze:
+                    existing = (
+                        await self.db.execute(
+                            select(AnalysisResult)
+                            .where(AnalysisResult.raw_data_id == raw_data_id)
+                            .order_by(AnalysisResult.created_at.desc())
+                            .limit(1)
+                        )
+                    ).scalar_one_or_none()
+                    if existing:
+                        result = await self.get_result(existing.request_id)
+                        return {**result, "from_cache": True}
+                return await self._analyze(raw_data_id, force_reanalyze)
+        except TimeoutError as exc:
+            await self.db.rollback()
+            raise AppException(
+                code=ErrorCode.AGENT_TIMEOUT,
+                message="分析超过 300 秒，请检查模型服务",
+                status_code=504,
+            ) from exc
+        finally:
+            await redis.eval(
+                "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end return 0",
+                1,
+                lock,
+                token,
+            )
+
+    async def _analyze(self, raw_data_id: str, force_reanalyze: bool = False) -> dict:
         """执行风险分析（含 Agent 决策全流程）。
 
         Args:
@@ -90,7 +133,11 @@ class RiskService:
         raw_data_payload = {}
         if raw_data.payload:
             try:
-                raw_data_payload = json.loads(raw_data.payload) if isinstance(raw_data.payload, str) else raw_data.payload
+                raw_data_payload = (
+                    json.loads(raw_data.payload)
+                    if isinstance(raw_data.payload, str)
+                    else raw_data.payload
+                )
             except (json.JSONDecodeError, TypeError):
                 raw_data_payload = {"raw": str(raw_data.payload)[:500]}
         stage_ms["parse_payload"] = round((time.monotonic() - t_parse) * 1000, 1)
@@ -109,6 +156,36 @@ class RiskService:
         # 先结束挂起的只读事务释放数据库连接，避免连接长时间空闲被 MySQL 断开，
         # 同时提前取出后续要用的字段（rollback 会使 ORM 对象属性过期）
         source_id, source_type = raw_data.source_id, raw_data.source_type
+        config_snapshot = get_effective_llm_config()
+        safe_config = {
+            key: config_snapshot[key]
+            for key in (
+                "provider",
+                "model",
+                "temperature",
+                "max_tokens",
+                "mock_mode",
+                "smart_routing",
+            )
+        }
+        rule_versions = (
+            await self.db.execute(
+                select(RuleNode.id, RuleNode.version).where(RuleNode.is_active.is_(True))
+            )
+        ).all()
+        provenance = {
+            "input_hash": raw_data.data_hash,
+            "configuration": safe_config,
+            "configuration_hash": hashlib.sha256(
+                json.dumps(safe_config, sort_keys=True).encode()
+            ).hexdigest(),
+            "active_rule_versions_at_start": {r.id: r.version for r in rule_versions},
+            "prompts": {
+                name: hashlib.sha256(path.read_bytes()).hexdigest()
+                for name, path in self._prompt_paths()
+            },
+            "scoring_version": "risk-score-v1",
+        }
         await self.db.rollback()
 
         final_state = await run_decision_flow(
@@ -169,6 +246,8 @@ class RiskService:
                 "data_quality_score": final_state.get("data_quality_score"),
                 "data_issues": final_state.get("data_issues", []),
                 "structured_facts": final_state.get("structured_facts"),
+                "provenance": provenance,
+                "node_timings": final_state.get("node_timings") or [],
             },
         )
         await self.analysis_repo.create(analysis)
@@ -219,7 +298,9 @@ class RiskService:
         quality_score = final_state.get("data_quality_score")
         if quality_score is None:
             quality_score = 0.0
-        await self.raw_data_repo.update_status(raw_data_id, RawDataStatus.PROCESSED, quality_score=quality_score)
+        await self.raw_data_repo.update_status(
+            raw_data_id, RawDataStatus.PROCESSED, quality_score=quality_score
+        )
         stage_ms["update_raw_data"] = round((time.monotonic() - t6) * 1000, 1)
         logger.info(
             "risk_service.raw_data_updated",
@@ -234,18 +315,23 @@ class RiskService:
         if agent_status == DecisionStatus.HUMAN_REVIEW or risk_level in ("high", "critical"):
             t7 = time.monotonic()
             try:
-                from app.services.notification_service import NotificationService
-                notifier = NotificationService()
-                await notifier.send_risk_alert(
-                    level=risk_level or "unknown",
-                    request_id=request_id,
-                    risk_score=final_state.get("risk_score", 0),
-                    details={
-                        "decision": decision_result.get("action"),
-                        "confidence": final_state.get("confidence"),
-                        "anomaly_tags": final_state.get("anomaly_tags", []),
-                        "reflection_passed": reflection.get("passed"),
-                    },
+                from app.models.notification_outbox import NotificationOutbox
+
+                self.db.add(
+                    NotificationOutbox(
+                        level=risk_level or "unknown",
+                        payload={
+                            "type": "risk_alert",
+                            "request_id": request_id,
+                            "risk_score": final_state.get("risk_score"),
+                            "details": {
+                                "decision": decision_result.get("action"),
+                                "confidence": final_state.get("confidence"),
+                                "anomaly_tags": final_state.get("anomaly_tags", []),
+                                "reflection_passed": reflection.get("passed"),
+                            },
+                        },
+                    )
                 )
                 logger.info(
                     "risk_service.alert_sent",
@@ -300,6 +386,13 @@ class RiskService:
             "reflection_passed": decision.reflection_passed,
             "created_at": analysis.created_at.isoformat() if analysis.created_at else None,
         }
+
+    @staticmethod
+    def _prompt_paths():
+        from pathlib import Path
+
+        directory = Path(__file__).resolve().parents[1] / "agents" / "prompts"
+        return [(p.name, p) for p in directory.glob("*.yaml")]
 
     async def get_result(self, request_id: str) -> dict | None:
         """获取分析结果。

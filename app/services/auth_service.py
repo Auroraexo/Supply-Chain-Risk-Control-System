@@ -3,17 +3,16 @@
 处理用户登录、注册、Token 生成等业务逻辑。
 """
 
-from datetime import datetime, timezone
-from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status
+from datetime import UTC, datetime
 
-from app.core.security import (
-    verify_password,
-    hash_password,
-    create_access_token,
-    create_refresh_token,
-)
+from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import get_settings
+from app.core.security import (
+    hash_password,
+    verify_password,
+)
 from app.models.user import User, UserRole
 from app.repositories.user_repo import UserRepository
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserInfoResponse
@@ -53,21 +52,22 @@ class AuthService:
             )
 
         # 更新最后登录时间
-        user.last_login_at = datetime.now(timezone.utc)
+        user.last_login_at = datetime.now(UTC)
         await self._repo.db.flush()
 
         # 生成 Token
         scopes = self._get_scopes_for_role(user.role)
-        access_token = create_access_token(
-            data={
+        from app.core.session import new_session
+
+        access_token, refresh_token = await new_session(
+            {
                 "sub": user.id,
                 "username": user.username,
                 "role": user.role.value,
                 "scopes": scopes,
-                "is_active": user.is_active,
+                "is_active": True,
             }
         )
-        refresh_token = create_refresh_token(data={"sub": user.id})
 
         return TokenResponse(
             access_token=access_token,
@@ -111,20 +111,11 @@ class AuthService:
                 detail="邮箱已被注册",
             )
 
-        # 验证角色
-        try:
-            role = UserRole(request.role) if request.role else UserRole.ANALYST
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"无效的角色: {request.role}，可选值: analyst, decider, admin",
-            )
-
         user = User(
             username=request.username,
             email=request.email,
             hashed_password=hash_password(request.password),
-            role=role,
+            role=UserRole.ANALYST,
         )
 
         user = await self._repo.create(user)

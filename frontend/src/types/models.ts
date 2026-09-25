@@ -1,6 +1,6 @@
 export type RiskLevel = 'critical' | 'high' | 'medium' | 'low' | 'none';
 
-export type DataStatus = 'pending' | 'processing' | 'running' | 'completed' | 'failed';
+export type DataStatus = 'pending' | 'processing' | 'running' | 'completed' | 'failed' | 'processed' | 'invalid';
 
 export type DecisionType = 'approve' | 'reject' | 'escalate' | 'pending_review';
 
@@ -42,6 +42,11 @@ export interface AnalysisResult {
 }
 
 export interface DecisionResult {
+  case_status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  owner_id: string | null;
+  due_at: string | null;
+  resolution: string | null;
+  revision: number;
   id: string;
   request_id: string;
   analysis_id: string;
@@ -122,6 +127,7 @@ export interface AlertItem {
 }
 
 export interface LLMConfig {
+  version: number;
   provider: string;
   model: string;
   api_key: string;

@@ -29,9 +29,15 @@ spec:
               name: management
           env:
             - name: RABBITMQ_DEFAULT_USER
-              value: guest
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: RABBITMQ_USER
             - name: RABBITMQ_DEFAULT_PASS
-              value: guest
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: RABBITMQ_PASSWORD
           volumeMounts:
             - name: data
               mountPath: /var/lib/rabbitmq

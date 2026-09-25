@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { User } from '@/types/models';
 
-const storedToken = localStorage.getItem('auth_token');
+localStorage.removeItem('auth_token'); // Credentials now live in HttpOnly cookies.
 const storedUser = localStorage.getItem('auth_user');
 
 function readStoredUser(): User | null {
@@ -18,26 +18,32 @@ const initialUser = readStoredUser();
 
 interface AuthState {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
-  login: (user: User, token: string) => void;
+  login: (user: User) => void;
+  clearSession: () => void;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: initialUser,
-  token: storedToken,
-  isAuthenticated: Boolean(initialUser && storedToken),
-  login: (user, token) => {
-    localStorage.setItem('auth_token', token);
+  // The cached user is display-only. Authentication must be confirmed by the
+  // HttpOnly session cookie through /auth/me before protected routes render.
+  isAuthenticated: false,
+  login: (user) => {
     localStorage.setItem('auth_user', JSON.stringify(user));
-    set({ user, token, isAuthenticated: true });
+    set({ user, isAuthenticated: true });
   },
-  logout: () => {
+  clearSession: () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
-    set({ user: null, token: null, isAuthenticated: false });
+    set({ user: null, isAuthenticated: false });
+  },
+  logout: () => {
+    void fetch(`${import.meta.env.VITE_API_BASE_URL || '/api/v1'}/auth/logout`, { method: 'POST', credentials: 'include' });
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    set({ user: null, isAuthenticated: false });
   },
   updateUser: (updates) =>
     set((state) => ({

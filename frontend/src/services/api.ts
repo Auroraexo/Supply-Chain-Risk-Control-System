@@ -3,6 +3,7 @@ import type { ApiResponse, PaginatedData } from '@/types/api';
 import { useProgressStore } from '@/stores/progressStore';
 
 const api = axios.create({
+  withCredentials: true,
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 30000,
   headers: {
@@ -11,12 +12,12 @@ const api = axios.create({
 });
 
 let activeRequests = 0;
+let refreshRequest: Promise<unknown> | null = null;
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  // Authentication is cookie-based. Keep this explicit on every request so
+  // per-request options or future wrapper changes cannot silently drop it.
+  config.withCredentials = true;
   activeRequests++;
   if (activeRequests === 1) {
     useProgressStore.getState().start();
@@ -33,13 +34,21 @@ api.interceptors.response.use(
     }
     return response;
   },
-  (error) => {
+  async (error) => {
     activeRequests--;
     if (activeRequests <= 0) {
       activeRequests = 0;
       useProgressStore.getState().done();
     }
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/')) {
+      if (!error.config?.headers?.['X-Auth-Retry']) {
+        try {
+          refreshRequest ??= axios.post(`${api.defaults.baseURL}/auth/refresh`, {}, { withCredentials: true }).finally(() => { refreshRequest = null; });
+          await refreshRequest;
+          error.config.headers['X-Auth-Retry'] = '1';
+          return api.request(error.config);
+        } catch { /* Expired session: return to login below. */ }
+      }
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
       window.location.href = '/login';

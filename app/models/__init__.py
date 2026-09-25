@@ -6,3 +6,6 @@ from app.models.rule_node import RuleNode, RuleType, LogicOp
 from app.models.rule_version import RuleVersion
 from app.models.agent_execution_log import AgentExecutionLog
 from app.models.user import User, UserRole
+from app.models.system_setting import SystemSetting, SettingRevision
+from app.models.audit_event import AuditEvent
+from app.models.notification_outbox import NotificationOutbox

@@ -12,6 +12,8 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
+from fastapi.responses import JSONResponse
+from app.core.request_guard import RequestGuardMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 
@@ -38,6 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
 
     import structlog
+
     logger = structlog.get_logger(__name__)
     logger.info(
         "app_starting",
@@ -71,6 +74,7 @@ def create_app() -> FastAPI:
     )
 
     # === 注册中间件（顺序很重要） ===
+    app.add_middleware(RequestGuardMiddleware)
     # 1. CORS
     app.add_middleware(
         CORSMiddleware,
@@ -87,8 +91,7 @@ def create_app() -> FastAPI:
     app.add_middleware(MetricsMiddleware)
 
     # 4. 请求日志
-    if not settings.is_production:
-        app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(RequestLoggingMiddleware)
 
     # === 注册路由 ===
     app.include_router(api_router)
@@ -109,13 +112,10 @@ def create_app() -> FastAPI:
     @app.get("/health/ready", tags=["Health"])
     async def health_ready():
         """就绪探针：检查所有依赖服务连通性。"""
-        try:
-            from app.core.redis import get_redis
-            redis = await get_redis()
-            await redis.ping()
-            return {"status": "ok", "database": "connected", "redis": "connected"}
-        except Exception as e:
-            return {"status": "degraded", "error": str(e)}
+        from app.core.health import dependency_health
+
+        result = await dependency_health()
+        return JSONResponse(result, status_code=200 if result["status"] == "ok" else 503)
 
     # === 全局异常处理 ===
     register_exception_handlers(app)
@@ -129,6 +129,7 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
+
     settings = get_settings()
     uvicorn.run(
         "app.main:app",

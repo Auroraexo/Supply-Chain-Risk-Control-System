@@ -5,7 +5,6 @@
 """
 
 from enum import StrEnum
-from functools import lru_cache
 from itertools import repeat
 from typing import Any
 
@@ -25,7 +24,6 @@ class LLMProvider(StrEnum):
     LOCAL = "local"
 
 
-@lru_cache
 def get_llm(
     provider: LLMProvider | None = None,
     temperature: float | None = None,
@@ -43,20 +41,34 @@ def get_llm(
     Returns:
         BaseChatModel 实例
     """
-    settings = get_settings()
     config = get_effective_llm_config()
+    if provider is not None:
+        config["provider"] = provider.value
+    if temperature is not None:
+        config["temperature"] = temperature
+    if max_tokens is not None:
+        config["max_tokens"] = max_tokens
+    if mock is not None:
+        config["mock_mode"] = mock
+    return build_llm(config)
+
+
+def build_llm(config: dict[str, Any]) -> BaseChatModel:
+    """Single factory shared by real Agent calls and connection tests."""
+    settings = get_settings()
 
     # Mock 模式
-    if mock is None:
-        mock = bool(config["mock_mode"])
+    mock = bool(config.get("mock_mode", False))
     if mock:
         # 使用无限迭代器产出确定性假回复，避免 StopIteration 崩溃
-        return GenericFakeChatModel(messages=iter(repeat(AIMessage(content="[mock] 这是模拟 LLM 回复"))))
+        return GenericFakeChatModel(
+            messages=iter(repeat(AIMessage(content="[mock] 这是模拟 LLM 回复")))
+        )
 
     # 确定 provider
-    provider = provider or LLMProvider(str(config["provider"]))
-    temp = temperature if temperature is not None else float(config["temperature"])
-    tokens = max_tokens if max_tokens is not None else int(config["max_tokens"])
+    provider = LLMProvider(str(config["provider"]))
+    temp = float(config["temperature"])
+    tokens = int(config["max_tokens"])
 
     common_kwargs: dict[str, Any] = {
         "temperature": temp,
@@ -66,6 +78,8 @@ def get_llm(
     }
 
     api_key = SecretStr(str(config["api_key"]))
+    if provider != LLMProvider.LOCAL and not api_key.get_secret_value():
+        raise ValueError("云端模型必须配置 API Key")
     model = str(config["model"])
     configured_base_url = str(config.get("base_url") or "").strip()
 
@@ -132,7 +146,11 @@ async def get_smart_llm(query: str, **kwargs) -> BaseChatModel:
     Returns:
         BaseChatModel 实例
     """
+    config = get_effective_llm_config()
+    if config["provider"] != "local" or not config["smart_routing"]:
+        return get_llm(**kwargs)
     from app.core.model_selector import get_smart_llm as _smart
+
     return await _smart(query, **kwargs)
 
 

@@ -30,7 +30,7 @@ export function Login() {
     setLoading(true);
     try {
       const response = await authService.login({ username, password });
-      const { access_token, user } = response.data;
+      const { user } = response.data;
       login(
         {
           id: user.id,
@@ -39,8 +39,7 @@ export function Login() {
           role: user.role as 'analyst' | 'decider' | 'admin',
           is_active: user.is_active,
           created_at: user.created_at,
-        },
-        access_token
+        }
       );
       addToast({ type: 'success', title: '登录成功', message: '欢迎回来' });
       navigate('/dashboard');

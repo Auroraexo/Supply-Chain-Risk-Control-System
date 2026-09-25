@@ -18,6 +18,8 @@ import type { RawData, DataStatus } from '@/types/models';
 import type { TableColumn } from '@/types/common';
 
 const statusConfig: Record<DataStatus, { label: string; variant: 'info' | 'success' | 'default' | 'high' }> = {
+  processed: { label: '已处理', variant: 'success' },
+  invalid: { label: '数据无效', variant: 'high' },
   pending: { label: '待处理', variant: 'default' },
   processing: { label: '处理中', variant: 'info' },
   running: { label: '运行中', variant: 'info' },

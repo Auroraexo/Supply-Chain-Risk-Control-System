@@ -42,7 +42,10 @@ spec:
                 name: app-secrets
           env:
             - name: DATABASE_URL
-              value: "mysql+asyncmy://root:$MYSQL_ROOT_PASSWORD@mysql.supply-chain.svc.cluster.local:3306/supply_chain_risk"
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: DATABASE_URL
           # 运行数据库迁移（Alembic），完成后由主进程接管
           # 注：多副本并发迁移有风险，首次部署或迁移变更时建议用 Job 单独执行
           resources:

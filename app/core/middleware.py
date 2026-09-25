@@ -42,15 +42,12 @@ class TraceIdMiddleware(BaseHTTPMiddleware):
         # 注入到 structlog 上下文
         structlog.contextvars.bind_contextvars(trace_id=trace_id)
 
-        response = await call_next(request)
-
-        # 添加到响应头
-        response.headers["X-Trace-ID"] = trace_id
-
-        # 清理上下文
-        structlog.contextvars.unbind_contextvars("trace_id")
-
-        return response
+        try:
+            response = await call_next(request)
+            response.headers["X-Trace-ID"] = trace_id
+            return response
+        finally:
+            structlog.contextvars.unbind_contextvars("trace_id")
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -95,11 +92,13 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 
         method = request.method
         # 使用路由模板而非实际路径，避免高基数（如 /api/v1/raw-data/{id}）
-        path_template = request.scope.get("route").path if "route" in request.scope else request.url.path
 
         start_time = time.monotonic()
         response = await call_next(request)
         elapsed = time.monotonic() - start_time
+        # Routing is resolved by call_next, not before it. Collapse unknown paths.
+        route = request.scope.get("route")
+        path_template = getattr(route, "path", "unmatched")
 
         HTTP_REQUESTS_TOTAL.labels(
             method=method, path=path_template, status=response.status_code

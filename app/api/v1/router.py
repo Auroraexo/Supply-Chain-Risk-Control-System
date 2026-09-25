@@ -1,15 +1,34 @@
-from fastapi import APIRouter
-from app.api.v1 import risk, decision, review, rule, auth, dashboard, raw_data_crud, user_management, settings, automation
+from fastapi import APIRouter, Depends
+from app.core.security import get_current_active_user
+from app.api.v1 import treatment
+from app.api.v1 import (
+    risk,
+    decision,
+    review,
+    rule,
+    auth,
+    dashboard,
+    raw_data_crud,
+    user_management,
+    settings,
+    automation,
+)
 
 api_router = APIRouter(prefix="/api/v1")
 
 api_router.include_router(auth.router, tags=["认证"])
-api_router.include_router(risk.router, tags=["风险评估"])
-api_router.include_router(decision.router, tags=["决策"])
-api_router.include_router(review.router, tags=["人工审核"])
-api_router.include_router(rule.router, tags=["规则管理"])
-api_router.include_router(dashboard.router, tags=["仪表盘"])
-api_router.include_router(raw_data_crud.router, tags=["原始数据"])
-api_router.include_router(user_management.router, tags=["用户管理"])
-api_router.include_router(settings.router, tags=["系统设置"])
-api_router.include_router(automation.router, tags=["AI自动化"])
+for module, tag in (
+    (risk, "风险评估"),
+    (decision, "决策"),
+    (review, "人工审核"),
+    (rule, "规则管理"),
+    (dashboard, "仪表盘"),
+    (raw_data_crud, "原始数据"),
+    (user_management, "用户管理"),
+    (settings, "系统设置"),
+    (automation, "AI自动化"),
+    (treatment, "风险处置"),
+):
+    api_router.include_router(
+        module.router, tags=[tag], dependencies=[Depends(get_current_active_user)]
+    )

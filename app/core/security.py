@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 from jose import JWTError, jwt
 
@@ -28,6 +28,7 @@ def hash_password(password: str) -> str:
 
 # === OAuth2 配置 ===
 oauth2_scheme = OAuth2PasswordBearer(
+    auto_error=False,
     tokenUrl="/api/v1/auth/login",
     scopes={
         "read": "读取权限",
@@ -67,17 +68,18 @@ def decode_token(token: str) -> dict[str, Any]:
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
         return payload
-    except JWTError as e:
+    except JWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"无效的认证凭证: {str(e)}",
+            detail="无效或已过期的认证凭证",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
 
 
 async def get_current_user(
     security_scopes: SecurityScopes,
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
 ) -> dict[str, Any]:
     """获取当前认证用户（FastAPI 依赖）。
 
@@ -86,7 +88,19 @@ async def get_current_user(
         async def get_me(user: dict = Depends(get_current_user)):
             ...
     """
+    token = token or request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(401, "请先登录")
     payload = decode_token(token)
+    if payload.get("type") != "access" or not payload.get("sub"):
+        raise HTTPException(status_code=401, detail="需要有效的 Access Token")
+    from app.core.redis import get_redis
+    import json
+
+    sid = payload.get("sid")
+    session = await (await get_redis()).get(f"session:{sid}") if sid else None
+    if not session or json.loads(session).get("sub") != payload["sub"]:
+        raise HTTPException(401, "会话已失效，请重新登录")
 
     # 验证 scope
     token_scopes = payload.get("scopes", [])
@@ -104,7 +118,16 @@ async def get_current_active_user(
     current_user: dict = Depends(get_current_user),
 ) -> dict[str, Any]:
     """获取当前活跃用户（额外检查用户状态）。"""
-    # 可在此处查询数据库验证用户是否被禁用
-    if not current_user.get("is_active", True):
+    from app.core.database import get_session_factory
+    from app.models.user import User
+
+    async with get_session_factory()() as session:
+        user = await session.get(User, current_user["sub"])
+    if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="用户已被禁用")
+    from app.services.auth_service import AuthService
+
+    current_user.update(
+        role=user.role.value, scopes=AuthService._get_scopes_for_role(user.role), is_active=True
+    )
     return current_user

@@ -11,10 +11,21 @@ DBSession = Annotated[AsyncSession, Depends(get_db)]
 # 当前用户依赖
 CurrentUser = Annotated[dict, Depends(get_current_active_user)]
 
+
 # 管理员权限依赖
 async def get_admin_user(current_user: CurrentUser) -> dict:
     if "admin" not in current_user.get("scopes", []):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
     return current_user
 
+
 AdminUser = Annotated[dict, Depends(get_admin_user)]
+
+
+async def get_decider_user(current_user: CurrentUser) -> dict:
+    if current_user.get("role") not in ("decider", "admin"):
+        raise HTTPException(status_code=403, detail="需要决策员或管理员权限")
+    return current_user
+
+
+DeciderUser = Annotated[dict, Depends(get_decider_user)]

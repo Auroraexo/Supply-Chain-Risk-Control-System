@@ -9,6 +9,9 @@ import { StatePanel } from '@/components/ui/StatePanel';
 import { useToastStore } from '@/stores/toastStore';
 import { decisionService } from '@/services/decisionService';
 import type { DecisionResult } from '@/types/models';
+import { AuditPanel } from '@/components/business/AuditPanel';
+import { TreatmentPanel } from '@/components/business/TreatmentPanel';
+import { useAuthStore } from '@/stores/authStore';
 
 type ReviewAction = 'approve' | 'reject' | 'escalate';
 
@@ -21,6 +24,7 @@ export function DecisionApproval() {
   const [loadError, setLoadError] = useState(false);
   const [submitting, setSubmitting] = useState<ReviewAction | null>(null);
   const [comment, setComment] = useState('');
+  const user = useAuthStore(s => s.user);
 
   const fetchDecision = useCallback(async () => {
     if (!id) return;
@@ -53,7 +57,7 @@ export function DecisionApproval() {
   if (!decision) return <StatePanel title="审批任务不存在" description="该任务可能已被删除或请求地址无效。"/>;
 
   const confidence = Math.round((decision.confidence || 0) * 100);
-  const isPending = decision.decision === 'pending_review';
+  const isPending = (decision.decision === 'pending_review' || decision.decision === 'escalate') && (user?.role === 'decider' || user?.role === 'admin');
   return (
     <div className="space-y-5 animate-fade-in pb-28 lg:pb-0">
       <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -63,6 +67,8 @@ export function DecisionApproval() {
 
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
+          <TreatmentPanel key={`${decision.id}-${decision.revision}`} decision={decision} onSaved={fetchDecision}/>
+          <AuditPanel key={`audit-${decision.revision}`} decisionId={decision.id}/>
           <Card padding="lg">
             <div className="mb-5 flex items-center justify-between"><div><p className="text-caption font-semibold text-accent-blue">系统建议</p><h2 className="mt-1 text-h2 text-text-primary">{decision.decision === 'approve' ? '建议通过并持续监控' : decision.decision === 'reject' ? '建议阻断当前操作' : '建议转人工研判'}</h2></div><div className="text-right"><p className="font-mono text-[30px] font-bold text-text-primary">{confidence}%</p><p className="text-[11px] text-text-muted">模型置信度</p></div></div>
             <div className="h-2 overflow-hidden rounded-full bg-bg-tertiary"><div className={`h-full rounded-full ${confidence >= 80 ? 'bg-risk-low' : confidence >= 60 ? 'bg-risk-medium' : 'bg-risk-critical'}`} style={{width:`${confidence}%`}}/></div>

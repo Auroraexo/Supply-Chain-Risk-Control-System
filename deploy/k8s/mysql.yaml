@@ -34,6 +34,16 @@ spec:
                   key: MYSQL_ROOT_PASSWORD
             - name: MYSQL_DATABASE
               value: supply_chain_risk
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_PASSWORD
           volumeMounts:
             - name: data
               mountPath: /var/lib/mysql

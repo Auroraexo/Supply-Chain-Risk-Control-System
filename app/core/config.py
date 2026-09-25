@@ -5,9 +5,13 @@
 """
 
 from functools import lru_cache
+from contextvars import ContextVar
 from typing import Any, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, model_validator
+from sqlalchemy.engine import make_url
+from urllib.parse import urlparse
 
 
 class Settings(BaseSettings):
@@ -18,6 +22,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     # === 应用配置 ===
@@ -44,6 +49,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    SETTINGS_ENCRYPTION_KEY: str = ""
 
     # === RabbitMQ ===
     RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
@@ -80,8 +86,30 @@ class Settings(BaseSettings):
     LANGSMITH_PROJECT: str = "supply-chain-risk"
 
     # === 安全 ===
-    RATE_LIMIT_PER_MINUTE: int = 60
-    REQUEST_BODY_MAX_SIZE_MB: int = 10
+    RATE_LIMIT_PER_MINUTE: int = Field(default=60, ge=1)
+    LOGIN_RATE_LIMIT_PER_MINUTE: int = Field(default=10, ge=1)
+    REQUEST_BODY_MAX_SIZE_MB: int = Field(default=10, ge=1)
+
+    @model_validator(mode="after")
+    def validate_production(self):
+        if self.is_production:
+            if len(self.JWT_SECRET_KEY) < 32 or self.JWT_SECRET_KEY.startswith("change-me"):
+                raise ValueError("生产环境必须配置至少 32 字符的随机 JWT_SECRET_KEY")
+            if self.DEBUG:
+                raise ValueError("生产环境禁止 DEBUG=true")
+            db_url = make_url(self.DATABASE_URL)
+            if db_url.username == "root" or not db_url.password or db_url.password == "password":
+                raise ValueError("生产数据库必须使用独立低权限账号和非默认密码")
+            mq_url = urlparse(self.RABBITMQ_URL)
+            if mq_url.username == "guest" or not mq_url.password or mq_url.password == "guest":
+                raise ValueError("生产 RabbitMQ 必须使用独立账号和非默认密码")
+            from cryptography.fernet import Fernet
+
+            try:
+                Fernet(self.SETTINGS_ENCRYPTION_KEY.encode())
+            except (ValueError, TypeError) as exc:
+                raise ValueError("生产环境必须配置有效的 SETTINGS_ENCRYPTION_KEY") from exc
+        return self
 
     # === 通知 ===
     WECOM_WEBHOOK_URL: str = ""
@@ -110,10 +138,12 @@ def get_settings() -> Settings:
     return Settings()
 
 
-# Settings changed from the admin UI are intentionally process-local until a
-# persistent settings store is introduced. Keeping the override in this module
-# makes it visible to every LLM caller instead of only to the settings router.
+# CLI-only overrides remain available for tests. API requests use an isolated
+# ContextVar loaded from the encrypted database on each request/worker instance.
 _runtime_llm_config: dict[str, Any] = {}
+request_llm_config: ContextVar[dict[str, Any] | None] = ContextVar(
+    "request_llm_config", default=None
+)
 
 
 def get_effective_llm_config() -> dict[str, Any]:
@@ -132,6 +162,7 @@ def get_effective_llm_config() -> dict[str, Any]:
         "smart_routing": settings.MODEL_SELECTOR_ENABLED,
     }
     config.update({key: value for key, value in _runtime_llm_config.items() if value is not None})
+    config.update(request_llm_config.get() or {})
     return config
 
 

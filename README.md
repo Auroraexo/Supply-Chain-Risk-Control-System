@@ -14,6 +14,30 @@
 
 ---
 
+## 生产基础能力（2026-09）
+
+本版本已将关键运行能力从演示模式提升为可审计的持久化模式：
+
+- 浏览器登录使用 HttpOnly / SameSite Cookie，Refresh Token 单次轮换并可在 Redis 撤销；升级后用户需重新登录一次。
+- 模型与通知配置使用 `SETTINGS_ENCRYPTION_KEY` 加密保存，带版本号、操作人、历史记录和冲突检测。
+- “测试模型”会真正调用当前指定模型完成一次最小推理，不再仅访问模型列表。
+- 高风险通知采用数据库 Outbox → RabbitMQ → 独立 Worker，具备持久消息、有限重试、死信队列和渠道去重。
+- 审批意见、人工覆盖和风险处置状态写入不可变审计事件；风险需要经过负责人、截止时间、整改和复核后才能关闭。
+
+首次升级必须先生成设置加密密钥并运行迁移：
+
+```powershell
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+alembic upgrade head
+python -m app.workers.notifications
+```
+
+Docker Compose 不再接受默认生产密码。请从 `.env.example` 创建 `.env`，至少设置数据库密码、RabbitMQ 密码、JWT 密钥、`SETTINGS_ENCRYPTION_KEY` 和 `MIGRATION_DATABASE_URL`。`docker compose up` 会先执行迁移服务，再启动 API 与通知 Worker。
+
+Kubernetes 应先应用 `deploy/k8s/migration-job.yaml`，确认迁移成功后再发布 `app.yaml` 和 `notification-worker.yaml`。应用数据库账号只保留业务 DML 权限，迁移 Job 使用独立 schema migrator 凭据。
+
+---
+
 ## 目录
 
 - [项目概述](#项目概述)

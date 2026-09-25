@@ -8,6 +8,8 @@
 
 from prometheus_client import Counter, Gauge, Histogram
 
+from app.core.config import get_effective_llm_config
+
 # === HTTP API 指标 ===
 HTTP_REQUESTS_TOTAL = Counter(
     "http_requests_total",
@@ -76,15 +78,19 @@ def record_llm_usage(agent_name: str, llm, resp, logger=None, state: dict | None
         if prompt_tokens:
             AGENT_TOKENS_TOTAL.labels(agent_name=agent_name, token_type="prompt").inc(prompt_tokens)
         if completion_tokens:
-            AGENT_TOKENS_TOTAL.labels(agent_name=agent_name, token_type="completion").inc(completion_tokens)
+            AGENT_TOKENS_TOTAL.labels(agent_name=agent_name, token_type="completion").inc(
+                completion_tokens
+            )
         model = getattr(llm, "model_name", None) or getattr(llm, "model", "") or "unknown"
-        LLM_CALLS_TOTAL.labels(provider="default", model=str(model), status="success").inc()
+        provider = str(get_effective_llm_config().get("provider", "unknown"))
+        LLM_CALLS_TOTAL.labels(provider=provider, model=str(model), status="success").inc()
 
         if state is not None:
             acc = state.get("token_usage") or {}
             state["token_usage"] = {
                 "prompt_tokens": int(acc.get("prompt_tokens") or 0) + int(prompt_tokens or 0),
-                "completion_tokens": int(acc.get("completion_tokens") or 0) + int(completion_tokens or 0),
+                "completion_tokens": int(acc.get("completion_tokens") or 0)
+                + int(completion_tokens or 0),
             }
             state["_llm_model"] = str(model)
     except Exception:

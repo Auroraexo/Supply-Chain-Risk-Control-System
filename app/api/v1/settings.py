@@ -1,290 +1,176 @@
-"""设置管理 API 端点。"""
+"""Encrypted, versioned administrator settings and real inference diagnostics."""
 
+import asyncio
+import json
 import time
-from fastapi import APIRouter
-from app.api.deps import AdminUser
+
+import httpx
+from fastapi import APIRouter, HTTPException
+from sqlalchemy import select
+
+from app.api.deps import AdminUser, DBSession
+from app.core.config import get_effective_llm_config, request_llm_config
+from app.models.system_setting import SettingRevision
 from app.schemas.common import DataResponse
 from app.schemas.settings import (
     LLMConfigRequest,
     LLMConfigResponse,
     LLMTestRequest,
     LLMTestResponse,
-    OllamaModelListResponse,
-    OllamaModelInfo,
     NotificationSettingsRequest,
-    NotificationSettingsResponse,
-    NotificationChannel,
 )
-from app.core.config import get_effective_llm_config, get_settings, set_runtime_llm_config
+from app.services.settings_service import SettingsService, settings_cipher
 
 router = APIRouter(prefix="/settings")
-
-# 运行时通知渠道配置（内存存储）
-_runtime_notification_channels: list[dict] = [
+MASK = "••••••••"
+DEFAULT_CHANNELS = [
     {"id": "1", "type": "email", "name": "邮件通知", "enabled": False, "config": ""},
     {"id": "2", "type": "webhook", "name": "Webhook", "enabled": False, "config": ""},
     {"id": "3", "type": "slack", "name": "Slack", "enabled": False, "config": ""},
 ]
 
 
-def _human_size(num_bytes: int) -> str:
-    """将字节数转换为可读格式。"""
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if num_bytes < 1024.0:
-            return f"{num_bytes:.1f} {unit}"
-        num_bytes /= 1024.0
-    return f"{num_bytes:.1f} PB"
+def public_config(cfg: dict, version: int) -> dict:
+    return LLMConfigResponse(
+        **{**cfg, "api_key": MASK if cfg.get("api_key") else "", "version": version}
+    ).model_dump()
+
+
+def resolve_key(cfg: dict, effective: dict) -> dict:
+    if cfg["api_key"] == MASK:
+        if cfg["provider"] != effective["provider"]:
+            raise HTTPException(422, "切换模型提供商后必须重新填写 API Key")
+        cfg["api_key"] = effective.get("api_key", "")
+    if cfg["provider"] != "local" and not cfg["api_key"]:
+        raise HTTPException(422, "云端模型必须填写 API Key")
+    if cfg["provider"] == "local":
+        cfg["api_key"] = ""
+    return cfg
 
 
 @router.get("/llm", response_model=DataResponse)
-async def get_llm_config():
-    """获取 LLM 配置。"""
-    cfg = get_effective_llm_config()
-    cfg["api_key"] = "••••••••" if cfg.get("api_key") else ""
-    return DataResponse(data=LLMConfigResponse(**cfg).model_dump())
+async def get_llm_config(db: DBSession, user: AdminUser):
+    cfg, version = await SettingsService(db).read("llm")
+    return DataResponse(data=public_config(cfg or get_effective_llm_config(), version))
 
 
 @router.put("/llm", response_model=DataResponse)
-async def update_llm_config(config: LLMConfigRequest, user: AdminUser):
-    """更新 LLM 配置。"""
-    cfg = config.model_dump()
-    # 如果 API Key 是占位符，不覆盖真实值
-    if cfg["api_key"] == "••••••••":
-        cfg["api_key"] = get_effective_llm_config().get("api_key", "")
-    set_runtime_llm_config(cfg)
-    # Import lazily so the settings endpoint does not make optional model
-    # runtime dependencies a server-startup requirement.
-    from app.core.llm import get_llm
-    get_llm.cache_clear()
-    response_cfg = {**cfg, "api_key": "••••••••" if cfg.get("api_key") else ""}
-    return DataResponse(data=response_cfg, message="LLM配置已更新")
+async def update_llm_config(config: LLMConfigRequest, db: DBSession, user: AdminUser):
+    cfg = resolve_key(config.model_dump(exclude={"version"}), get_effective_llm_config())
+    version = await SettingsService(db).write("llm", cfg, user["sub"], config.version)
+    await db.commit()
+    request_llm_config.set(cfg)
+    return DataResponse(data=public_config(cfg, version), message="配置已加密保存，下次调用生效")
+
+
+@router.get("/llm/history", response_model=DataResponse)
+async def llm_history(db: DBSession, user: AdminUser):
+    return DataResponse(data=await SettingsService(db).history("llm"))
+
+
+@router.post("/llm/rollback/{version}", response_model=DataResponse)
+async def rollback_llm(version: int, config: LLMConfigRequest, db: DBSession, user: AdminUser):
+    row = (
+        await db.execute(
+            select(SettingRevision).where(
+                SettingRevision.key == "llm", SettingRevision.version == version
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise HTTPException(404, "配置版本不存在")
+    cfg = json.loads(settings_cipher().decrypt(row.encrypted_value.encode()))
+    new_version = await SettingsService(db).write("llm", cfg, user["sub"], config.version)
+    await db.commit()
+    return DataResponse(data=public_config(cfg, new_version), message="配置已回滚")
 
 
 @router.post("/llm/test", response_model=DataResponse)
-async def test_llm_connection(request: LLMTestRequest):
-    """测试 LLM 连接。"""
-    import httpx
+async def test_llm_connection(request: LLMTestRequest, db: DBSession, user: AdminUser):
+    from app.core.llm import build_llm
 
-    t0 = time.monotonic()
+    cfg = resolve_key(request.model_dump(exclude={"version"}), get_effective_llm_config())
+    cfg.update(mock_mode=False, max_tokens=16, temperature=0)
+    start = time.monotonic()
     try:
-        api_key = request.api_key
-        effective = get_effective_llm_config()
-        if not api_key or api_key == "••••••••":
-            api_key = effective.get("api_key", "")
-
-        # Ollama 本地模型不需要 API Key
-        if request.provider == "local":
-            ollama_url = (request.ollama_base_url or effective.get("ollama_base_url") or get_settings().OLLAMA_BASE_URL).rstrip("/")
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{ollama_url}/api/tags")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    model_count = len(data.get("models", []))
-                    latency = round((time.monotonic() - t0) * 1000, 1)
-                    return DataResponse(
-                        data=LLMTestResponse(
-                            success=True,
-                            message=f"Ollama 服务运行正常，发现 {model_count} 个模型",
-                            latency_ms=latency,
-                        ).model_dump()
-                    )
-                return DataResponse(
-                    data=LLMTestResponse(
-                        success=False,
-                        message=f"无法连接到 Ollama 服务 ({resp.status_code})，请确认服务已启动并在端口 11434 监听",
-                    ).model_dump()
-                )
-
-        if not api_key:
-            return DataResponse(
-                data=LLMTestResponse(
-                    success=False,
-                    message="API Key 未配置，请先设置 API Key",
-                ).model_dump()
-            )
-
-        if request.provider == "openai":
-            base_url = request.base_url or effective.get("base_url") or "https://api.openai.com/v1"
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(
-                    f"{base_url.rstrip('/')}/models",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                )
-                if resp.status_code == 200:
-                    latency = round((time.monotonic() - t0) * 1000, 1)
-                    return DataResponse(
-                        data=LLMTestResponse(
-                            success=True,
-                            message="连接成功，OpenAI API 响应正常",
-                            latency_ms=latency,
-                        ).model_dump()
-                    )
-                return DataResponse(
-                    data=LLMTestResponse(
-                        success=False,
-                        message=f"API 返回错误: {resp.status_code} - {resp.text[:200]}",
-                    ).model_dump()
-                )
-
-        elif request.provider == "azure_openai":
-            base_url = request.base_url or effective.get("base_url") or ""
-            if not base_url:
-                return DataResponse(data=LLMTestResponse(success=False, message="Azure OpenAI 需要填写 Base URL").model_dump())
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(
-                    f"{base_url.rstrip('/')}/openai/deployments?api-version={request.api_version}",
-                    headers={"api-key": api_key},
-                )
-                if resp.status_code == 200:
-                    latency = round((time.monotonic() - t0) * 1000, 1)
-                    return DataResponse(
-                        data=LLMTestResponse(
-                            success=True,
-                        message="连接成功，Azure OpenAI 端点响应正常",
-                            latency_ms=latency,
-                        ).model_dump()
-                    )
-                return DataResponse(
-                    data=LLMTestResponse(
-                        success=False,
-                        message=f"API 返回错误: {resp.status_code}",
-                    ).model_dump()
-                )
-
-        elif request.provider == "anthropic":
-            base_url = request.base_url or effective.get("base_url") or "https://api.anthropic.com"
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(
-                    f"{base_url.rstrip('/')}/v1/models",
-                    headers={
-                        "x-api-key": api_key,
-                        "anthropic-version": "2023-06-01",
-                    },
-                )
-                if resp.status_code == 200:
-                    latency = round((time.monotonic() - t0) * 1000, 1)
-                    return DataResponse(
-                        data=LLMTestResponse(
-                            success=True,
-                            message="连接成功，Anthropic API 响应正常",
-                            latency_ms=latency,
-                        ).model_dump()
-                    )
-                return DataResponse(
-                    data=LLMTestResponse(
-                        success=False,
-                        message=f"API 返回错误: {resp.status_code}",
-                    ).model_dump()
-                )
-
-        else:
-            latency = round((time.monotonic() - t0) * 1000, 1)
-            return DataResponse(
-                data=LLMTestResponse(
-                    success=True,
-                    message=f"Provider '{request.provider}' 配置已验证",
-                    latency_ms=latency,
-                ).model_dump()
-            )
-
-    except httpx.ConnectError:
-        return DataResponse(
-            data=LLMTestResponse(
-                success=False,
-                message="网络连接失败，请检查服务地址和网络设置",
-            ).model_dump()
+        model = build_llm(cfg)
+        async with asyncio.timeout(30):
+            result = await model.ainvoke("Reply with only OK.")
+        if not result.content:
+            raise ValueError("模型返回空内容")
+        data = LLMTestResponse(
+            success=True,
+            message=f"指定模型 {cfg['model']} 已完成真实推理",
+            latency_ms=round((time.monotonic() - start) * 1000, 1),
         )
-    except httpx.TimeoutException:
-        return DataResponse(
-            data=LLMTestResponse(
-                success=False,
-                message="连接超时，请检查服务是否正常运行",
-            ).model_dump()
+    except Exception as exc:
+        # Provider response bodies can include submitted keys or URLs.
+        status = getattr(exc, "status_code", None)
+        labels = {
+            401: "API Key 无效",
+            403: "模型权限不足",
+            404: "模型或端点不存在",
+            429: "请求限流或额度不足",
+        }
+        message = labels.get(status, "推理失败，请核对模型名称、服务地址和提供商参数")
+        if isinstance(exc, (TimeoutError, httpx.TimeoutException)):
+            message = "模型推理超时"
+        data = LLMTestResponse(
+            success=False, message=message, latency_ms=round((time.monotonic() - start) * 1000, 1)
         )
-    except Exception as e:
-        return DataResponse(
-            data=LLMTestResponse(
-                success=False,
-                message=f"连接测试失败: {str(e)}",
-            ).model_dump()
-        )
+    return DataResponse(data=data.model_dump())
+
+
+def human_size(size: int) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024 or unit == "TB":
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return ""
 
 
 @router.get("/llm/ollama-models", response_model=DataResponse)
-async def list_ollama_models(base_url: str = "http://localhost:11434"):
-    """获取 Ollama 本地可用模型列表。"""
-    import httpx
-
+async def list_ollama_models(user: AdminUser, base_url: str = "http://localhost:11434"):
     try:
-        ollama_url = base_url.rstrip("/")
+        base_url = LLMConfigRequest.valid_url(base_url)
+    except ValueError as exc:
+        raise HTTPException(422, "无效的 Ollama URL") from exc
+    try:
         async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(f"{ollama_url}/api/tags")
-            if resp.status_code != 200:
-                return DataResponse(
-                    data=OllamaModelListResponse(
-                        models=[],
-                        available=False,
-                        message=f"无法连接 Ollama (HTTP {resp.status_code})",
-                    ).model_dump()
-                )
-
-            data = resp.json()
-            raw_models = data.get("models", [])
-            models: list[OllamaModelInfo] = []
-            for m in raw_models:
-                models.append(OllamaModelInfo(
-                    name=m.get("name", ""),
-                    size=_human_size(m.get("size", 0)),
-                    parameter_count=m.get("details", {}).get("parameter_size", ""),
-                    modified_at=m.get("modified_at", ""),
-                ))
-            return DataResponse(
-                data=OllamaModelListResponse(
-                    models=models,
-                    available=True,
-                    message=f"发现 {len(models)} 个可用模型",
-                ).model_dump()
-            )
-
-    except httpx.ConnectError:
+            resp = await client.get(f"{base_url}/api/tags")
+            resp.raise_for_status()
+        models = [
+            {
+                "name": m["name"],
+                "size": human_size(m.get("size", 0)),
+                "parameter_count": "",
+                "modified_at": m.get("modified_at", ""),
+            }
+            for m in resp.json().get("models", [])
+        ]
         return DataResponse(
-            data=OllamaModelListResponse(
-                models=[],
-                available=False,
-                message="无法连接到 Ollama 服务。请先安装并启动: https://ollama.com/download",
-            ).model_dump()
+            data={"models": models, "available": True, "message": f"发现 {len(models)} 个模型"}
         )
-    except httpx.TimeoutException:
+    except (httpx.HTTPError, ValueError, KeyError):
         return DataResponse(
-            data=OllamaModelListResponse(
-                models=[],
-                available=False,
-                message="连接 Ollama 超时，请检查服务是否在运行",
-            ).model_dump()
-        )
-    except Exception as e:
-        return DataResponse(
-            data=OllamaModelListResponse(
-                models=[],
-                available=False,
-                message=f"获取模型列表失败: {str(e)}",
-            ).model_dump()
+            data={
+                "models": [],
+                "available": False,
+                "message": "无法获取 Ollama 模型，请检查服务地址和连接",
+            }
         )
 
 
 @router.get("/notifications", response_model=DataResponse)
-async def get_notification_settings():
-    """获取通知渠道配置。"""
-    channels = [NotificationChannel(**ch).model_dump() for ch in _runtime_notification_channels]
-    return DataResponse(data=NotificationSettingsResponse(channels=channels).model_dump())
+async def get_notification_settings(db: DBSession, user: AdminUser):
+    value, version = await SettingsService(db).read("notifications")
+    return DataResponse(data={**(value or {"channels": DEFAULT_CHANNELS}), "version": version})
 
 
 @router.put("/notifications", response_model=DataResponse)
-async def update_notification_settings(settings: NotificationSettingsRequest, user: AdminUser):
-    """更新通知渠道配置。"""
-    global _runtime_notification_channels
-    _runtime_notification_channels = [ch.model_dump() for ch in settings.channels]
-    return DataResponse(
-        data=NotificationSettingsResponse(channels=settings.channels).model_dump(),
-        message="通知设置已更新",
-    )
+async def update_notification_settings(
+    settings: NotificationSettingsRequest, db: DBSession, user: AdminUser
+):
+    value = settings.model_dump(exclude={"version"})
+    version = await SettingsService(db).write("notifications", value, user["sub"], settings.version)
+    return DataResponse(data={**value, "version": version}, message="通知设置已加密保存")

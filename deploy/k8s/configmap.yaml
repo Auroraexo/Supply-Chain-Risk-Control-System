@@ -16,7 +16,6 @@ data:
   # 服务发现使用集群内 DNS；密码部分由 app.yaml 中 env 拼接，
   # 或直接改用 External Secrets 注入完整 DATABASE_URL
   REDIS_URL: "redis://redis.supply-chain.svc.cluster.local:6379/0"
-  RABBITMQ_URL: "amqp://guest:guest@rabbitmq.supply-chain.svc.cluster.local:5672/"
   CORS_ORIGINS: "https://your-domain.com"
   LLM_PROVIDER: "openai"
   LLM_MODEL: "gpt-4o-mini"
