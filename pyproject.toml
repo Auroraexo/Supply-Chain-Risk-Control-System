@@ -1,13 +1,43 @@
 [project]
 name = "supply-chain-risk-control"
 version = "0.1.0"
-description = "供应链智能决策系统 - Python 版多 Agent 架构"
+description = "Multi-agent supply chain risk control platform built on FastAPI + LangGraph, with rule engine, human review loop and reliable alerting."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
     { name = "Supply Chain Risk Control Team" }
 ]
+keywords = [
+    "supply-chain",
+    "risk-control",
+    "risk-management",
+    "multi-agent",
+    "agentic-ai",
+    "langgraph",
+    "llm",
+    "decision-engine",
+    "rule-engine",
+    "fastapi",
+    "fraud-detection",
+    "audit",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/Auroraexo/Supply-Chain-Risk-Control-System"
+Repository = "https://github.com/Auroraexo/Supply-Chain-Risk-Control-System"
+Issues = "https://github.com/Auroraexo/Supply-Chain-Risk-Control-System/issues"
+Changelog = "https://github.com/Auroraexo/Supply-Chain-Risk-Control-System/releases"
 
 dependencies = [
     # Web 框架

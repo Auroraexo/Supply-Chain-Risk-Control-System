@@ -1,16 +1,51 @@
 # 供应链智能决策系统
 
 <p align="center">
-  <strong>Supply Chain Risk Control System</strong> — 基于多 Agent 协同架构的智能供应链风险管控平台
+  <strong>Supply Chain Risk Control System</strong><br/>
+  基于多 Agent 协同架构的智能供应链风险管控平台
 </p>
 
 <p align="center">
+  <a href="https://github.com/Auroraexo/Supply-Chain-Risk-Control-System/actions/workflows/ci.yml"><img src="https://github.com/Auroraexo/Supply-Chain-Risk-Control-System/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/python-3.12+-blue?logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/fastapi-0.115+-009688?logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/react-18-61DAFB?logo=react&logoColor=white" alt="React">
-  <img src="https://img.shields.io/badge/typescript-5.8-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/LangGraph-1.x-FF6F00" alt="LangGraph">
+  <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" alt="React">
+  <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome">
 </p>
+
+<p align="center">
+  <em>The open-source multi-agent supply-chain risk control platform — from raw data ingestion to human-reviewed decision, with full audit trail and reliable alerting.</em>
+</p>
+
+---
+
+## 全链路流程图
+
+<p align="center">
+  <img src="docs/flow.png" alt="供应链智能决策系统 - 业务流程全链路图" width="90%"/>
+</p>
+
+> 完整节点说明见 [`docs/供应链风控系统-流程节点说明.md`](docs/供应链风控系统-流程节点说明.md)。
+
+## 为什么做这个项目
+
+开源生态里做"供应链风控"的项目大致分三类，但**没有一个把完整闭环串起来**：
+
+| 能力 | 规则引擎类<br/>(risk_engine / Radar) | 风险情报类<br/>(SCRI Platform) | 软件供应链安全<br/>(Dependency-Track) | **本项目** |
+| --- | :---: | :---: | :---: | :---: |
+| 规则决策树 / 评分卡 | ✅ | ❌ | ❌ | ✅ |
+| LLM / 多 Agent 推理 | ❌ | ❌ | ❌ | ✅ |
+| 高风险二次复核（Reflection） | ❌ | ❌ | ❌ | ✅ |
+| 人工审核 + 处置状态机 | ❌ | ❌ | ❌ | ✅ |
+| 不可变审计事件 | ❌ | ❌ | ⚠️ | ✅ |
+| Outbox → MQ → Worker 可靠通知 | ❌ | ❌ | ❌ | ✅ |
+| 外部风险情报接入（制裁/地缘/灾害） | ❌ | ✅ | ❌ | 🔜 |
+| 软件成分分析（SBOM/CVE） | ❌ | ❌ | ✅ | ❌ |
+
+本项目补的空白：**用 LangGraph 把"数据质检 → 风险打分 → 高危复核 → 规则决策 → 人工审核 → 整改闭环"串成一条可审计的流水线**。规则引擎负责确定性判定，LLM 负责非结构化推理，人负责最终高风险兜底。
 
 ---
 
@@ -537,21 +572,9 @@ alembic downgrade -1
 
 ## 贡献指南
 
-欢迎贡献代码！请遵循以下流程：
+欢迎贡献代码！详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-1. **Fork** 本仓库
-2. 创建特性分支：`git checkout -b feat/your-feature`
-3. 编写代码并通过测试：`pytest && ruff check .`
-4. 提交变更：`git commit -m "feat: 添加新功能"`
-5. 推送分支：`git push origin feat/your-feature`
-6. 提交 **Pull Request**
-
-### 开发规范
-
-- Python 代码遵循 `ruff` 格式规范，行宽 100 字符
-- 所有新功能需包含测试
-- 核心模块使用 `TYPE_CHECKING` 懒加载以支持独立运行
-- API 变更需同步更新 OpenAPI 文档
+简短流程：Fork → 切特性分支 → 跑通 `ruff / mypy / bandit / pytest` → 提交 PR。
 
 ---
 
