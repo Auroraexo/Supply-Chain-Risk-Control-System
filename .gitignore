@@ -18,6 +18,7 @@ deploy/k8s/secrets.yaml
 # IDE
 .vscode/
 .idea/
+.trae/
 *.swp
 *.swo
 *~
