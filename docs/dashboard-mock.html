@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Supply Chain Risk Control — Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    width: 1440px;
+    height: 900px;
+    overflow: hidden;
+  }
+  .topbar {
+    height: 56px;
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    justify-content: space-between;
+  }
+  .logo { font-size: 16px; font-weight: 600; color: #f8fafc; }
+  .logo span { color: #38bdf8; }
+  .nav { display: flex; gap: 24px; font-size: 13px; color: #94a3b8; }
+  .nav .active { color: #38bdf8; border-bottom: 2px solid #38bdf8; padding-bottom: 18px; }
+  .user { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: #334155; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+
+  .main { padding: 20px 24px; }
+
+  /* 统计卡片 */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+  .card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 16px 20px;
+  }
+  .stat-label { font-size: 12px; color: #94a3b8; margin-bottom: 8px; }
+  .stat-value { font-size: 28px; font-weight: 600; color: #f8fafc; }
+  .stat-delta { font-size: 12px; margin-top: 6px; }
+  .up { color: #ef4444; }
+  .down { color: #22c55e; }
+
+  /* 主体三列 */
+  .row { display: grid; grid-template-columns: 320px 1fr 360px; gap: 16px; margin-bottom: 16px; }
+  .panel-title { font-size: 13px; font-weight: 600; color: #cbd5e1; margin-bottom: 12px; }
+
+  /* 待审核列表 */
+  .queue-item { padding: 10px 0; border-bottom: 1px solid #334155; font-size: 12px; }
+  .queue-item:last-child { border-bottom: none; }
+  .queue-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .queue-id { color: #38bdf8; font-family: monospace; }
+  .badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .badge-critical { background: #7f1d1d; color: #fca5a5; }
+  .badge-high { background: #7c2d12; color: #fdba74; }
+  .badge-medium { background: #78350f; color: #fcd34d; }
+  .badge-low { background: #14532d; color: #86efac; }
+  .queue-meta { color: #64748b; font-size: 11px; }
+
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: #94a3b8; font-weight: 500; padding: 8px 10px; border-bottom: 1px solid #334155; }
+  td { padding: 10px; border-bottom: 1px solid #334155; color: #cbd5e1; }
+  tr:last-child td { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Supply Chain <span>Risk Control</span></div>
+  <div class="nav">
+    <div class="active">仪表盘</div>
+    <div>风险评估</div>
+    <div>人工审核</div>
+    <div>规则配置</div>
+    <div>审计日志</div>
+  </div>
+  <div class="user">
+    <span>admin</span>
+    <div class="avatar">A</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- 统计卡片 -->
+  <div class="stats">
+    <div class="card">
+      <div class="stat-label">今日风险评估</div>
+      <div class="stat-value">1,284</div>
+      <div class="stat-delta up">▲ 12.4% 较昨日</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">高风险待处理</div>
+      <div class="stat-value" style="color:#ef4444">37</div>
+      <div class="stat-delta up">▲ 5 笔新增</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">待人工审核</div>
+      <div class="stat-value" style="color:#f59e0b">12</div>
+      <div class="stat-delta down">▼ 3 笔今日已闭环</div>
+    </div>
+    <div class="card">
+      <div class="stat-label">平均置信度</div>
+      <div class="stat-value" style="color:#22c55e">0.86</div>
+      <div class="stat-delta down">▼ 0.02 波动</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- 左：风险等级分布 -->
+    <div class="card">
+      <div class="panel-title">风险等级分布（近 30 天）</div>
+      <svg width="280" height="200" viewBox="0 0 280 200">
+        <!-- 圆环图，中心 140,100，外半径 80，内半径 50 -->
+        <!-- critical 12% -->
+        <circle cx="140" cy="100" r="65" fill="none" stroke="#ef4444" stroke-width="30"
+          stroke-dasharray="49 359" stroke-dashoffset="0" transform="rotate(-90 140 100)"/>
+        <!-- high 23% -->
+        <circle cx="140" cy="100" r="65" fill="none" stroke="#f97316" stroke-width="30"
+          stroke-dasharray="90 359" stroke-dashoffset="-49" transform="rotate(-90 140 100)"/>
+        <!-- medium 35% -->
+        <circle cx="140" cy="100" r="65" fill="none" stroke="#eab308" stroke-width="30"
+          stroke-dasharray="130 359" stroke-dashoffset="-139" transform="rotate(-90 140 100)"/>
+        <!-- low 30% -->
+        <circle cx="140" cy="100" r="65" fill="none" stroke="#22c55e" stroke-width="30"
+          stroke-dasharray="110 359" stroke-dashoffset="-269" transform="rotate(-90 140 100)"/>
+        <text x="140" y="95" text-anchor="middle" fill="#f8fafc" font-size="22" font-weight="600">4,286</text>
+        <text x="140" y="115" text-anchor="middle" fill="#94a3b8" font-size="11">总评估数</text>
+      </svg>
+      <div style="font-size:12px; color:#94a3b8; line-height:1.9; padding:0 10px;">
+        <div><span style="display:inline-block;width:10px;height:10px;background:#ef4444;border-radius:2px;margin-right:6px;"></span>Critical · 514 (12%)</div>
+        <div><span style="display:inline-block;width:10px;height:10px;background:#f97316;border-radius:2px;margin-right:6px;"></span>High · 986 (23%)</div>
+        <div><span style="display:inline-block;width:10px;height:10px;background:#eab308;border-radius:2px;margin-right:6px;"></span>Medium · 1,500 (35%)</div>
+        <div><span style="display:inline-block;width:10px;height:10px;background:#22c55e;border-radius:2px;margin-right:6px;"></span>Low · 1,286 (30%)</div>
+      </div>
+    </div>
+
+    <!-- 中：趋势折线 -->
+    <div class="card">
+      <div class="panel-title">风险评估量趋势（近 14 天）</div>
+      <svg width="100%" height="230" viewBox="0 0 640 230" preserveAspectRatio="none">
+        <!-- 网格线 -->
+        <line x1="40" y1="20" x2="620" y2="20" stroke="#334155" stroke-width="0.5"/>
+        <line x1="40" y1="70" x2="620" y2="70" stroke="#334155" stroke-width="0.5"/>
+        <line x1="40" y1="120" x2="620" y2="120" stroke="#334155" stroke-width="0.5"/>
+        <line x1="40" y1="170" x2="620" y2="170" stroke="#334155" stroke-width="0.5"/>
+        <!-- Y 轴标签 -->
+        <text x="30" y="24" fill="#64748b" font-size="10" text-anchor="end">1500</text>
+        <text x="30" y="74" fill="#64748b" font-size="10" text-anchor="end">1000</text>
+        <text x="30" y="124" fill="#64748b" font-size="10" text-anchor="end">500</text>
+        <text x="30" y="174" fill="#64748b" font-size="10" text-anchor="end">0</text>
+        <!-- 高风险折线（橙） -->
+        <polyline fill="none" stroke="#f97316" stroke-width="2"
+          points="40,140 85,130 130,135 175,120 220,125 265,110 310,115 355,95 400,100 445,85 490,90 535,75 580,80 625,65"/>
+        <!-- 总量折线（蓝） -->
+        <polyline fill="none" stroke="#38bdf8" stroke-width="2"
+          points="40,100 85,90 130,95 175,80 220,85 265,70 310,75 355,55 400,60 445,45 490,50 535,35 580,40 625,25"/>
+        <!-- X 轴标签 -->
+        <text x="40" y="195" fill="#64748b" font-size="10">09-12</text>
+        <text x="175" y="195" fill="#64748b" font-size="10">09-15</text>
+        <text x="310" y="195" fill="#64748b" font-size="10">09-18</text>
+        <text x="445" y="195" fill="#64748b" font-size="10">09-21</text>
+        <text x="580" y="195" fill="#64748b" font-size="10">09-24</text>
+        <!-- 图例 -->
+        <circle cx="450" cy="215" r="4" fill="#38bdf8"/><text x="460" y="219" fill="#94a3b8" font-size="11">总评估</text>
+        <circle cx="530" cy="215" r="4" fill="#f97316"/><text x="540" y="219" fill="#94a3b8" font-size="11">高风险</text>
+      </svg>
+      <div style="font-size:11px; color:#64748b; padding:0 10px;">
+        9-23 地震情报触发外部加分 +10，高风险量环比上升 18%。
+      </div>
+    </div>
+
+    <!-- 右：待审核队列 -->
+    <div class="card">
+      <div class="panel-title">待人工审核队列</div>
+      <div class="queue-item">
+        <div class="queue-row">
+          <span class="queue-id">req_8f3a2c1e</span>
+          <span class="badge badge-critical">CRITICAL</span>
+        </div>
+        <div class="queue-meta">唐山钢铁贸易 · ¥486,000 · 延迟 15 天</div>
+      </div>
+      <div class="queue-item">
+        <div class="queue-row">
+          <span class="queue-id">req_7b2d9a4f</span>
+          <span class="badge badge-high">HIGH</span>
+        </div>
+        <div class="queue-meta">佛山五金 · ¥215,000 · 价格偏差 18.5%</div>
+      </div>
+      <div class="queue-item">
+        <div class="queue-row">
+          <span class="queue-id">req_6c1e8b3d</span>
+          <span class="badge badge-high">HIGH</span>
+        </div>
+        <div class="queue-meta">东京精密部件 · 地震周边 80km</div>
+      </div>
+      <div class="queue-item">
+        <div class="queue-row">
+          <span class="queue-id">req_5d9f7c2e</span>
+          <span class="badge badge-medium">MEDIUM</span>
+        </div>
+        <div class="queue-meta">宁波塑胶原料 · 延迟 5 天 · 1 次历史事故</div>
+      </div>
+      <div class="queue-item">
+        <div class="queue-row">
+          <span class="queue-id">req_4e8a6d1c</span>
+          <span class="badge badge-medium">MEDIUM</span>
+        </div>
+        <div class="queue-meta">数据质量不足，已转人工补录</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部：最近决策表 -->
+  <div class="card">
+    <div class="panel-title">最近决策记录</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Request ID</th>
+          <th>供应商</th>
+          <th>金额</th>
+          <th>评分</th>
+          <th>等级</th>
+          <th>决策</th>
+          <th>置信度</th>
+          <th>时间</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-family:monospace;color:#38bdf8">req_8f3a2c1e</td>
+          <td>唐山钢铁贸易公司</td>
+          <td>¥486,000</td>
+          <td>86.5</td>
+          <td><span class="badge badge-critical">CRITICAL</span></td>
+          <td>PENDING_REVIEW</td>
+          <td>0.91</td>
+          <td>2 分钟前</td>
+        </tr>
+        <tr>
+          <td style="font-family:monospace;color:#38bdf8">req_7b2d9a4f</td>
+          <td>佛山五金制品厂</td>
+          <td>¥215,000</td>
+          <td>62.0</td>
+          <td><span class="badge badge-high">HIGH</span></td>
+          <td>ESCALATE</td>
+          <td>0.88</td>
+          <td>8 分钟前</td>
+        </tr>
+        <tr>
+          <td style="font-family:monospace;color:#38bdf8">req_6c1e8b3d</td>
+          <td>东京精密部件</td>
+          <td>¥320,000</td>
+          <td>48.5</td>
+          <td><span class="badge badge-medium">MEDIUM</span></td>
+          <td>APPROVE</td>
+          <td>0.82</td>
+          <td>15 分钟前</td>
+        </tr>
+        <tr>
+          <td style="font-family:monospace;color:#38bdf8">req_2a1b9c8d</td>
+          <td>苏州精密机械</td>
+          <td>¥128,000</td>
+          <td>5.8</td>
+          <td><span class="badge badge-low">LOW</span></td>
+          <td>APPROVE</td>
+          <td>0.97</td>
+          <td>32 分钟前</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -107,6 +107,32 @@ async def analyst_node(state: AgentState) -> AgentState:
             state["anomaly_tags"].append("supplier_risk")
         if similarity_score > 0:
             state["anomaly_tags"].append("historical_pattern")
+
+        # 外部情报：供应商位置周边地震风险（可选增强，失败静默）
+        ext_lat = facts.get("supplier_lat") or facts.get("supplier_latitude")
+        ext_lon = facts.get("supplier_lon") or facts.get("supplier_longitude")
+        if ext_lat is not None and ext_lon is not None:
+            try:
+                from app.services.external_intel import assess_disaster_risk
+                disaster = await assess_disaster_risk(float(ext_lat), float(ext_lon))
+                addon = float(disaster.get("risk_addon") or 0.0)
+                if addon > 0:
+                    score = round(min(100.0, score + addon), 2)
+                    level = _score_to_level(score)
+                    state["risk_score"] = score
+                    state["risk_level"] = level
+                    state["anomaly_tags"].append("geographic_risk")
+                    state["disaster_intel"] = disaster
+                    logger.warning(
+                        "analyst.external_intel_applied",
+                        request_id=request_id,
+                        addon=addon,
+                        nearby=disaster.get("nearby_quakes"),
+                        max_mag=disaster.get("max_magnitude"),
+                    )
+            except Exception as ext_err:
+                logger.warning("analyst.external_intel_skipped", error=str(ext_err))
+
         state["retry_count"] = 0
 
         # ── 阶段 4：LLM 生成分析推理（失败时回退到规则文本） ──

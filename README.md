@@ -136,10 +136,15 @@ Kubernetes 应先应用 `deploy/k8s/migration-job.yaml`，确认迁移成功后�
 - 企业微信 / 邮件通知集成
 
 ### 现代化前端
+
 - 工业精密风 UI 设计
 - 响应式布局（Desktop / Tablet / Mobile）
 - 实时数据监控面板
 - 风险等级可视化
+
+<p align="center">
+  <img src="docs/screenshot.png" alt="Risk Control Dashboard" width="92%"/>
+</p>
 
 ---
 
