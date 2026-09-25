@@ -24,11 +24,11 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-import structlog
-from sqlalchemy import select
+import structlog  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 
-from app.core.database import get_session_factory
-from app.models.raw_data import RawData, RawDataStatus
+from app.core.database import get_session_factory  # noqa: E402
+from app.models.raw_data import RawData, RawDataStatus  # noqa: E402
 
 logger = structlog.get_logger(__name__)
 
@@ -151,6 +151,7 @@ DEMO_CASES = [
         "price_deviation": None,
         "supplier_rating": None,
         "historical_incidents": None,
+        "_no_dates": True,
         "_note": "数据质量差：Scout 质量分 < 0.5，直接转人工补录",
     },
     {
@@ -170,15 +171,11 @@ DEMO_CASES = [
 
 
 def _make_payload(case: dict) -> dict:
-    expected = datetime.now() - timedelta(days=max(case.get("delay_days") or 0, 0) + 2)
-    actual = expected + timedelta(days=case.get("delay_days") or 0)
     payload = {
         "order_id": case["order_id"],
         "supplier_id": case["source_id"],
         "supplier_name": case.get("supplier_name"),
         "amount": case.get("amount"),
-        "expected_delivery": expected.date().isoformat(),
-        "actual_delivery": actual.date().isoformat(),
         "delay_days": case.get("delay_days"),
         "price_deviation": case.get("price_deviation"),
         "supplier_rating": case.get("supplier_rating"),
@@ -186,6 +183,11 @@ def _make_payload(case: dict) -> dict:
         "supplier_lat": case.get("supplier_lat"),
         "supplier_lon": case.get("supplier_lon"),
     }
+    if not case.get("_no_dates"):
+        expected = datetime.now() - timedelta(days=max(case.get("delay_days") or 0, 0) + 2)
+        actual = expected + timedelta(days=case.get("delay_days") or 0)
+        payload["expected_delivery"] = expected.date().isoformat()
+        payload["actual_delivery"] = actual.date().isoformat()
     return {k: v for k, v in payload.items() if v is not None}
 
 
